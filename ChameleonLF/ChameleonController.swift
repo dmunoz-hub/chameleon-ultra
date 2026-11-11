@@ -650,32 +650,63 @@ final class ChameleonController: ObservableObject {
         _ = try await ble.send(.setSlotEnable, data: [slot, sense, 1])
     }
 
+    /// Store the last scanned HF tag into the active slot (no mode switch).
+    @discardableResult
+    private func storeHFInner() async throws -> Bool {
+        guard let t = lastHFTag else { line("Scan an HF tag first."); return false }
+        let slot = UInt8(activeSlot)
+        try await setupSlotForEmulation(slot: slot, tagType: 1001, sense: Self.senseHF) // MIFARE 1K
+        var p: [UInt8] = [UInt8(t.uid.count)]; p += t.uid; p += t.atqa; p.append(t.sak); p.append(UInt8(t.ats.count)); p += t.ats
+        let r = try await ble.send(.hf14aSetAntiColl, data: p)
+        guard r.genericOk else { line("Set anti-coll failed (\(r.statusEnum.label))."); return false }
+        _ = try await ble.send(.slotDataConfigSave)
+        try await loadSlotsInner()
+        line("Saved HF UID \(ChameleonFrame.hexSpaced(t.uid)) to slot \(activeSlot + 1).")
+        return true
+    }
+
+    /// Store the last read EM410x into the active slot (no mode switch), with readback.
+    @discardableResult
+    private func storeLFInner() async throws -> Bool {
+        guard let id = lastReadId else { line("Read an EM410x tag first."); return false }
+        let slot = UInt8(activeSlot)
+        try await setupSlotForEmulation(slot: slot, tagType: 100, sense: Self.senseLF) // EM410X
+        let r = try await ble.send(.em410xSetEmuId, data: id)
+        guard r.genericOk else { line("Set EM410x emu id failed (\(r.statusEnum.label))."); return false }
+        _ = try await ble.send(.slotDataConfigSave)
+        let g = try await ble.send(.em410xGetEmuId)
+        if g.genericOk, g.data.count >= 5 {
+            line("Slot \(activeSlot + 1) stores EM410x \(ChameleonFrame.hexSpaced(Array(g.data.prefix(5)))) (readback).")
+        }
+        try await loadSlotsInner()
+        return true
+    }
+
+    func storeHF() { run("Save HF to slot") { _ = try await self.storeHFInner() } }
+    func storeLF() { run("Save LF to slot") { _ = try await self.storeLFInner() } }
+
     func emulateHF() {
         run("Emulate HF") {
-            guard let t = self.lastHFTag else { self.line("Scan an HF tag first."); return }
-            let slot = UInt8(self.activeSlot)
-            try await self.setupSlotForEmulation(slot: slot, tagType: 1001, sense: Self.senseHF) // MIFARE 1K
-            var p: [UInt8] = [UInt8(t.uid.count)]; p += t.uid; p += t.atqa; p.append(t.sak); p.append(UInt8(t.ats.count)); p += t.ats
-            let r = try await self.ble.send(.hf14aSetAntiColl, data: p)
-            guard r.genericOk else { self.line("Set anti-coll failed (\(r.statusEnum.label))."); return }
-            _ = try await self.ble.send(.slotDataConfigSave)
-            try await self.loadSlotsInner()                       // refresh while still responsive
-            _ = try await self.ble.send(.changeDeviceMode, data: [0]) // tag mode — do this LAST
-            self.line("Emulating UID \(ChameleonFrame.hexSpaced(t.uid)) on slot \(self.activeSlot + 1) (tag mode). Present the HF antenna to a reader.")
+            if try await self.storeHFInner() {
+                _ = try await self.ble.send(.changeDeviceMode, data: [0])
+                self.line("Emulating on slot \(self.activeSlot + 1) (tag mode). Present the HF antenna to a reader.")
+            }
+        }
+    }
+    func emulateLF() {
+        run("Emulate LF") {
+            if try await self.storeLFInner() {
+                _ = try await self.ble.send(.changeDeviceMode, data: [0])
+                self.line("Emulating on slot \(self.activeSlot + 1) (tag mode). Present the LF antenna to a reader.")
+            }
         }
     }
 
-    func emulateLF() {
-        run("Emulate LF") {
-            guard let id = self.lastReadId else { self.line("Read an EM410x tag first."); return }
-            let slot = UInt8(self.activeSlot)
-            try await self.setupSlotForEmulation(slot: slot, tagType: 100, sense: Self.senseLF) // EM410X
-            let r = try await self.ble.send(.em410xSetEmuId, data: id)
-            guard r.genericOk else { self.line("Set EM410x emu id failed (\(r.statusEnum.label))."); return }
-            _ = try await self.ble.send(.slotDataConfigSave)
-            try await self.loadSlotsInner()                       // refresh while still responsive
-            _ = try await self.ble.send(.changeDeviceMode, data: [0]) // tag mode — do this LAST
-            self.line("Emulating EM410x \(ChameleonFrame.hexSpaced(id)) on slot \(self.activeSlot + 1) (tag mode). Present the LF antenna to a reader.")
+    func setAnimation(full: Bool) {
+        run("LED mode") {
+            _ = try await self.ble.send(.setAnimationMode, data: [full ? 0 : 2]) // 0=FULL, 2=NONE
+            _ = try await self.ble.send(.saveSettings)
+            self.line(full ? "LED animation set to Full (saved). The LED now flashes on field detect." : "LED animation set to None (saved).")
         }
     }
 }

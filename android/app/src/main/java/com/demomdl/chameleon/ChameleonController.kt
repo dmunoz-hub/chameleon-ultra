@@ -388,32 +388,52 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         ble.send(Cmd.SET_SLOT_ENABLE, byteArrayOf(slot.toByte(), sense.toByte(), 1))
     }
 
-    fun emulateHF() = run("Emulate HF") {
+    private suspend fun storeHFInner(): Boolean {
         val t = _lastHF.value
-        if (t == null) { log("Scan an HF tag first."); return@run }
+        if (t == null) { log("Scan an HF tag first."); return false }
         val slot = _activeSlot.value
         setupSlotForEmulation(slot, 1001, SENSE_HF) // MIFARE 1K
         val p = ArrayList<Byte>()
         p.add(t.uid.size.toByte()); p.addAll(t.uid.toList()); p.addAll(t.atqa.toList()); p.add(t.sak.toByte()); p.add(t.ats.size.toByte()); p.addAll(t.ats.toList())
         val r = ble.send(Cmd.HF14A_SET_ANTI_COLL_DATA, p.toByteArray())
-        if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return@run }
+        if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return false }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
-        loadSlotsInner()                                 // refresh while still responsive
-        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0)) // tag mode — last
-        log("Emulating UID ${t.uid.hexSpaced()} on slot ${slot + 1} (tag mode). Present the HF antenna to a reader.")
+        loadSlotsInner()
+        log("Saved HF UID ${t.uid.hexSpaced()} to slot ${slot + 1}.")
+        return true
     }
-
-    fun emulateLF() = run("Emulate LF") {
+    private suspend fun storeLFInner(): Boolean {
         val id = lastIdBytes
-        if (id == null) { log("Read an EM410x tag first."); return@run }
+        if (id == null) { log("Read an EM410x tag first."); return false }
         val slot = _activeSlot.value
         setupSlotForEmulation(slot, 100, SENSE_LF) // EM410X
         val r = ble.send(Cmd.EM410X_SET_EMU_ID, id)
-        if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return@run }
+        if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return false }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
-        loadSlotsInner()                                 // refresh while still responsive
-        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0)) // tag mode — last
-        log("Emulating EM410x ${id.hexSpaced()} on slot ${slot + 1} (tag mode). Present the LF antenna to a reader.")
+        val g = ble.send(Cmd.EM410X_GET_EMU_ID)
+        if (g.genericOk && g.data.size >= 5) log("Slot ${slot + 1} stores EM410x ${g.data.copyOfRange(0, 5).hexSpaced()} (readback).")
+        loadSlotsInner()
+        return true
+    }
+    fun storeHF() = run("Save HF to slot") { storeHFInner() }
+    fun storeLF() = run("Save LF to slot") { storeLFInner() }
+
+    fun emulateHF() = run("Emulate HF") {
+        if (storeHFInner()) {
+            ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
+            log("Emulating on slot ${_activeSlot.value + 1} (tag mode). Present the HF antenna to a reader.")
+        }
+    }
+    fun emulateLF() = run("Emulate LF") {
+        if (storeLFInner()) {
+            ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
+            log("Emulating on slot ${_activeSlot.value + 1} (tag mode). Present the LF antenna to a reader.")
+        }
+    }
+    fun setAnimation(full: Boolean) = run("LED mode") {
+        ble.send(Cmd.SET_ANIMATION_MODE, byteArrayOf((if (full) 0 else 2).toByte()))
+        ble.send(Cmd.SAVE_SETTINGS)
+        log(if (full) "LED animation set to Full (saved). The LED now flashes on field detect." else "LED animation set to None (saved).")
     }
 }
 

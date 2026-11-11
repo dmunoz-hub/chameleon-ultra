@@ -13,12 +13,15 @@ object Cmd {
     const val SET_SLOT_ENABLE = 1006
     const val SLOT_DATA_CONFIG_SAVE = 1009
     const val GET_DEVICE_CHIP_ID = 1011
+    const val SAVE_SETTINGS = 1013
+    const val SET_ANIMATION_MODE = 1015
     const val GET_ACTIVE_SLOT = 1018
     const val GET_SLOT_INFO = 1019
     const val GET_ENABLED_SLOTS = 1023
     const val GET_BATTERY_INFO = 1025
     const val HF14A_SET_ANTI_COLL_DATA = 4001
     const val EM410X_SET_EMU_ID = 5000
+    const val EM410X_GET_EMU_ID = 5001
     const val HF14A_SCAN = 2000
     const val MF1_DETECT_PRNG = 2002
     const val MF1_STATIC_NESTED_ACQUIRE = 2003

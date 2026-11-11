@@ -23,12 +23,15 @@ enum Command: UInt16 {
     case setSlotEnable          = 1006
     case slotDataConfigSave     = 1009
     case getDeviceChipId        = 1011
+    case saveSettings           = 1013
+    case setAnimationMode       = 1015
     case getActiveSlot          = 1018
     case getSlotInfo            = 1019
     case getEnabledSlots        = 1023
     case getBatteryInfo         = 1025
     case hf14aSetAntiColl       = 4001
     case em410xSetEmuId         = 5000
+    case em410xGetEmuId         = 5001
 
     case hf14aScan              = 2000
     case mf1DetectPrng          = 2002

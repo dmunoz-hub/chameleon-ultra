@@ -105,6 +105,7 @@ struct ContentView: View {
                 ActionButton("Read", "wave.3.right", disabled: !c.isConnected || c.busy) { c.readEM410xButton() }
                 ActionButton("Write", "square.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.writeButton() }
                 ActionButton("Verify", "checkmark.seal", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.verifyButton() }
+                ActionButton("→ Slot", "tray.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.storeLF() }
             }
 
             Button {
@@ -147,6 +148,7 @@ struct ContentView: View {
 
             HStack {
                 ActionButton("Scan", "dot.radiowaves.up.forward", disabled: !c.isConnected || c.busy) { c.hf14aScanButton() }
+                ActionButton("→ Slot", "tray.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastHFTag == nil) { c.storeHF() }
                 ActionButton("Recover keys", "key", disabled: !c.isConnected || c.busy) { c.recoverKeys() }
             }
         }
@@ -244,6 +246,7 @@ struct ContentView: View {
             HStack {
                 SmallButton("Emul. HF UID", disabled: !canAct || c.lastHFTag == nil, prominent: true) { c.emulateHF() }
                 SmallButton("Emul. LF ID", disabled: !canAct || c.lastReadId == nil, prominent: true) { c.emulateLF() }
+                SmallButton("LED Full", disabled: !canAct) { c.setAnimation(full: true) }
             }
             ForEach(c.slots) { s in
                 HStack(spacing: 6) {
@@ -254,10 +257,10 @@ struct ContentView: View {
                     Text("LF \(ChameleonController.tagName(s.lfType))")
                         .font(.caption2).foregroundStyle(s.lfEnabled ? Color.green : Color.secondary).lineLimit(1)
                     Spacer(minLength: 2)
-                    Button(s.hfEnabled ? "HF✕" : "HF✓") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) }
-                        .buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
-                    Button(s.lfEnabled ? "LF✕" : "LF✓") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) }
-                        .buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                    Button(s.hfEnabled ? "HF✓" : "HF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) }
+                        .buttonStyle(.bordered).controlSize(.mini).tint(s.hfEnabled ? .green : .secondary).disabled(!canAct)
+                    Button(s.lfEnabled ? "LF✓" : "LF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) }
+                        .buttonStyle(.bordered).controlSize(.mini).tint(s.lfEnabled ? .green : .secondary).disabled(!canAct)
                     if s.id != c.activeSlot {
                         Button("Use") { c.setActiveSlotButton(s.id) }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
                     }

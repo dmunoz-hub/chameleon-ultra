@@ -125,8 +125,9 @@ private fun ChameleonScreen(vm: ChameleonController) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallBtn("Read", canAct, Modifier.weight(1f)) { vm.readEM410x() }
                     SmallBtn("Write + Verify", canAct && lastId != null, Modifier.weight(1f), prominent = true) { vm.writeAndVerify() }
+                    SmallBtn("→ Slot", canAct && lastId != null, Modifier.weight(1f)) { vm.storeLF() }
                 }
-                Hint("Read the source tag → swap in a blank T5577 → Write + Verify re-reads and compares.")
+                Hint("Read the source tag → swap in a blank T5577 → Write + Verify. → Slot saves the ID into the active slot.")
             }
 
             // HF scan
@@ -138,7 +139,10 @@ private fun ChameleonScreen(vm: ChameleonController) {
                     Text("${if (t.clonable) "✅" else "⛔"} ${t.kindName}", style = MaterialTheme.typography.bodyMedium)
                     Hint(t.note)
                 } else Text("Scan a 13.56 MHz card to read its UID and type.", style = MaterialTheme.typography.bodySmall)
-                SmallBtn("Scan HF tag", canAct, Modifier.fillMaxWidth(), prominent = true) { vm.hfScan() }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallBtn("Scan HF tag", canAct, Modifier.weight(1f), prominent = true) { vm.hfScan() }
+                    SmallBtn("→ Slot", canAct && hf != null, Modifier.weight(1f)) { vm.storeHF() }
+                }
             }
 
             // MIFARE block
@@ -217,6 +221,7 @@ private fun ChameleonScreen(vm: ChameleonController) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallBtn("Emul. HF UID", canAct && hf != null, Modifier.weight(1f), prominent = true) { vm.emulateHF() }
                     SmallBtn("Emul. LF ID", canAct && lastId != null, Modifier.weight(1f), prominent = true) { vm.emulateLF() }
+                    SmallBtn("LED Full", canAct, Modifier.weight(1f)) { vm.setAnimation(true) }
                 }
                 slots.forEach { s ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -226,9 +231,13 @@ private fun ChameleonScreen(vm: ChameleonController) {
                         Text("LF ${slotTagName(s.lfType)}", fontSize = 10.sp, maxLines = 1,
                             color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                         TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_HF, !s.hfEnabled) }, enabled = canAct,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text(if (s.hfEnabled) "HF✕" else "HF✓", fontSize = 10.sp) }
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                            Text(if (s.hfEnabled) "HF✓" else "HF✕", fontSize = 10.sp, color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_LF, !s.lfEnabled) }, enabled = canAct,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text(if (s.lfEnabled) "LF✕" else "LF✓", fontSize = 10.sp) }
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                            Text(if (s.lfEnabled) "LF✓" else "LF✕", fontSize = 10.sp, color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         if (s.index != active) TextButton(onClick = { vm.setActiveSlot(s.index) }, enabled = canAct,
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
                     }

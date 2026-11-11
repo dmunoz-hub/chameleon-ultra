@@ -91,7 +91,10 @@
 
   <div class="card">
     <h2>HF · ISO 14443-A</h2>
-    <div class="row"><button class="act primary" data-fn="hfscan" disabled>Scan HF tag</button></div>
+    <div class="row">
+      <button class="act primary" data-fn="hfscan" disabled>Scan HF tag</button>
+      <button class="act" data-fn="hfstore" disabled>Save to slot</button>
+    </div>
     <div id="hfResult" style="margin-top:10px"></div>
 
     <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
@@ -167,6 +170,7 @@
       <button class="act needid" data-fn="lfwrite" disabled>Write T5577</button>
       <button class="act needid" data-fn="lfverify" disabled>Verify</button>
       <button class="act good needid" data-fn="lfclone" disabled>Write + Verify</button>
+      <button class="act needid" data-fn="lfstore" disabled>Save to slot</button>
     </div>
     <div id="lfResult" style="margin-top:10px"></div>
     <p class="hint">Read the source EM410x tag → swap in a blank T5577 → <b>Write + Verify</b> re-reads the card and compares.</p>
@@ -184,6 +188,7 @@
     <div class="row" style="margin-top:8px">
       <button class="act good" data-fn="emuhf" disabled>Emulate scanned HF UID</button>
       <button class="act good" data-fn="emulf" disabled>Emulate read EM410x</button>
+      <button class="act" data-fn="ledfull" disabled>LED: Full</button>
     </div>
     <p class="hint">Load slots to see the 8 emulation slots; toggle HF/LF per slot and pick the active one. <b>Emulate scanned/read</b> loads the last HF UID or EM410x ID into the active slot and switches the Chameleon to <b>tag mode</b> so it acts as that card. Save to flash to keep it across reboots.</p>
   </div>
@@ -221,9 +226,9 @@ const CMD = {
   MF1_DETECT_NT_DIST:2005, MF1_NESTED_ACQUIRE:2006, MF1_AUTH_ONE_KEY_BLOCK:2007,
   MF1_READ_ONE_BLOCK:2008, MF1_WRITE_ONE_BLOCK:2009, HF14A_RAW:2010, MF1_CHECK_KEYS_ON_BLOCK:2015,
   SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_DATA_DEFAULT:1005, SET_SLOT_ENABLE:1006, SLOT_DATA_CONFIG_SAVE:1009,
-  GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, GET_ENABLED_SLOTS:1023,
+  SAVE_SETTINGS:1013, SET_ANIMATION_MODE:1015, GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, GET_ENABLED_SLOTS:1023,
   EM410X_SCAN:3000, EM410X_WRITE_TO_T55XX:3001,
-  HF14A_SET_ANTI_COLL_DATA:4001, EM410X_SET_EMU_ID:5000,
+  HF14A_SET_ANTI_COLL_DATA:4001, EM410X_SET_EMU_ID:5000, EM410X_GET_EMU_ID:5001,
 };
 // Sense types and a few emulation tag types.
 const SENSE_LF = 1, SENSE_HF = 2;
@@ -707,8 +712,8 @@ function renderSlots(slots){
     right.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end";
     right.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span><span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`;
     const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "padding:4px 8px;font-size:.72rem"; b.onclick = () => guard(fn); return b; };
-    right.appendChild(mk(s.hfEn ? "HF off" : "HF on", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
-    right.appendChild(mk(s.lfEn ? "LF off" : "LF on", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
+    right.appendChild(mk(s.hfEn ? "HF ✓" : "HF ✕", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
+    right.appendChild(mk(s.lfEn ? "LF ✓" : "LF ✕", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
     if(s.i !== activeSlot) right.appendChild(mk("Active", () => setActiveSlot(s.i)));
     row.appendChild(right); el.appendChild(row);
   }
@@ -731,8 +736,9 @@ async function setMode(reader){
   await send(CMD.CHANGE_DEVICE_MODE, [reader ? 1 : 0]);
   logLine("sys", reader ? "Reader mode." : "Emulate (tag) mode — Chameleon now acts as the active slot's card.");
 }
-async function emulateHF(){
-  if(!lastHF){ logLine("err", "Scan an HF tag first (HF section)."); return; }
+// Store the last scanned HF tag into the active slot (no mode switch).
+async function storeHF(){
+  if(!lastHF){ logLine("err", "Scan an HF tag first (HF section)."); return false; }
   const slot = activeSlot, tt = 1001; // MIFARE 1K emulator
   const ttHi = (tt >> 8) & 0xFF, ttLo = tt & 0xFF;
   await send(CMD.SET_ACTIVE_SLOT, [slot]);
@@ -741,14 +747,15 @@ async function emulateHF(){
   await send(CMD.SET_SLOT_ENABLE, [slot, SENSE_HF, 1]);
   const p = [lastHF.uid.length, ...lastHF.uid, ...lastHF.atqa, lastHF.sak, lastHF.ats.length, ...lastHF.ats];
   const r = await send(CMD.HF14A_SET_ANTI_COLL_DATA, p);
-  if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
+  if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   await loadSlots();
-  await send(CMD.CHANGE_DEVICE_MODE, [0]); // tag mode — last
-  logLine("sys", `Emulating UID ${hexS(lastHF.uid)} on slot ${slot+1} (tag mode). Present the HF antenna to a reader.`);
+  logLine("sys", `Saved HF UID ${hexS(lastHF.uid)} to slot ${slot+1}.`);
+  return true;
 }
-async function emulateLF(){
-  if(!lastLfId){ logLine("err", "Read an EM410x tag first (LF section)."); return; }
+// Store the last read EM410x into the active slot (no mode switch), with readback.
+async function storeLF(){
+  if(!lastLfId){ logLine("err", "Read an EM410x tag first (LF section)."); return false; }
   const slot = activeSlot, tt = 100; // EM410X
   const ttHi = (tt >> 8) & 0xFF, ttLo = tt & 0xFF;
   await send(CMD.SET_ACTIVE_SLOT, [slot]);
@@ -756,11 +763,19 @@ async function emulateLF(){
   await send(CMD.SET_SLOT_DATA_DEFAULT, [slot, ttHi, ttLo]);
   await send(CMD.SET_SLOT_ENABLE, [slot, SENSE_LF, 1]);
   const r = await send(CMD.EM410X_SET_EMU_ID, Array.from(lastLfId));
-  if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
+  if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
+  const g = await send(CMD.EM410X_GET_EMU_ID);
+  if(g.status === 0x68 && g.data.length >= 5) logLine("sys", `Slot ${slot+1} stores EM410x ${hexS(Array.from(g.data.slice(0,5)))} (readback).`);
   await loadSlots();
-  await send(CMD.CHANGE_DEVICE_MODE, [0]); // tag mode — last
-  logLine("sys", `Emulating EM410x ${hexS(lastLfId)} on slot ${slot+1} (tag mode). Present the LF antenna to a reader.`);
+  return true;
+}
+async function emulateHF(){ if(await storeHF()){ await send(CMD.CHANGE_DEVICE_MODE, [0]); logLine("sys", `Emulating on slot ${activeSlot+1} (tag mode). Present the HF antenna to a reader.`); } }
+async function emulateLF(){ if(await storeLF()){ await send(CMD.CHANGE_DEVICE_MODE, [0]); logLine("sys", `Emulating on slot ${activeSlot+1} (tag mode). Present the LF antenna to a reader.`); } }
+async function setAnimation(full){
+  await send(CMD.SET_ANIMATION_MODE, [full ? 0 : 2]); // 0=FULL, 2=NONE
+  await send(CMD.SAVE_SETTINGS);
+  logLine("sys", full ? "LED animation set to Full (saved). The LED now flashes on field detect." : "LED animation set to None (saved).");
 }
 
 // ---- UI ----
@@ -834,6 +849,9 @@ async function runFn(fn){
     else if(fn==="modeemulate") await setMode(false);
     else if(fn==="emuhf") await emulateHF();
     else if(fn==="emulf") await emulateLF();
+    else if(fn==="lfstore") await storeLF();
+    else if(fn==="hfstore") await storeHF();
+    else if(fn==="ledfull") await setAnimation(true);
     else if(fn==="raw") await rawSend();
   }catch(e){ logLine("err", (fn+" error: ")+e.message); }
 }
