@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chameleon Web</title>
+<style>
+  /* Dark-first technical console. Tokens first, then components. */
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2430; --line:#2a3340;
+    --fg:#e6edf3; --muted:#8b98a9; --accent:#4cc2ff; --accent2:#7ee787;
+    --ok:#3fb950; --warn:#d29922; --err:#f85149;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:light){
+    :root{
+      --bg:#f4f6f9; --panel:#ffffff; --panel2:#eef2f7; --line:#d7dee7;
+      --fg:#161b22; --muted:#5b6673; --accent:#0969da; --accent2:#1a7f37;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.45;
+    padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left));
+    max-width:820px;margin:0 auto}
+  h1{font-size:1.25rem;margin:.6rem 0 .2rem;letter-spacing:.3px}
+  h1 .chip{font:600 .62rem/1 var(--mono);color:var(--accent);border:1px solid var(--line);
+    padding:4px 7px;border-radius:999px;vertical-align:middle;margin-left:8px;text-transform:uppercase;letter-spacing:1px}
+  .sub{color:var(--muted);font-size:.85rem;margin:0 0 1rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:0 0 10px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{font:600 .85rem var(--sans);color:var(--fg);background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:9px 13px;cursor:pointer;transition:.12s}
+  button:hover:not(:disabled){border-color:var(--accent)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:var(--accent);color:#06121c;border-color:transparent}
+  button.good{background:var(--accent2);color:#06160a;border-color:transparent}
+  .status{display:flex;align-items:center;gap:8px;font-size:.88rem}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+  .kv{display:flex;justify-content:space-between;gap:12px;font-size:.84rem;padding:3px 0;border-bottom:1px dashed var(--line)}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-family:var(--mono);text-align:right;word-break:break-all}
+  .pill{font:600 .7rem var(--mono);padding:2px 7px;border-radius:999px;border:1px solid var(--line)}
+  .pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,var(--line))}
+  .pill.no{color:var(--err);border-color:color-mix(in srgb,var(--err) 50%,var(--line))}
+  .hint{color:var(--muted);font-size:.78rem;margin-top:8px}
+  input[type=text]{flex:1;min-width:0;font:0.85rem var(--mono);color:var(--fg);background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  select{font:0.85rem var(--sans);color:var(--fg);background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:9px 11px;cursor:pointer}
+  #log{background:#0a0d12;border:1px solid var(--line);border-radius:9px;height:240px;overflow:auto;
+    padding:10px;font:0.72rem/1.5 var(--mono);white-space:pre-wrap;word-break:break-all;color:#cfe3f5}
+  @media (prefers-color-scheme:light){#log{background:#0d1117;color:#cfe3f5}}
+  .log-tx{color:var(--accent)} .log-rx{color:var(--accent2)} .log-err{color:var(--err)} .log-sys{color:var(--muted)}
+  .warn-banner{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));
+    color:var(--fg);border-radius:10px;padding:10px 12px;font-size:.82rem;margin-bottom:14px}
+  code{font-family:var(--mono);background:var(--panel2);padding:1px 5px;border-radius:5px;font-size:.85em}
+</style>
+</head>
+<body>
+  <h1>Chameleon Web <span class="chip">USB · BLE</span></h1>
+  <p class="sub">Browser controller for the Chameleon Ultra — connects over WebSerial (USB) or Web Bluetooth.</p>
+
+  <div id="compat" class="warn-banner" hidden></div>
+
+  <div class="card">
+    <h2>Connection</h2>
+    <div class="row" style="justify-content:space-between">
+      <div class="status"><span id="dot" class="dot"></span><span id="statusText">Not connected</span></div>
+      <div class="row">
+        <button id="btnUsb" class="primary">Connect USB</button>
+        <button id="btnBle">Connect Bluetooth</button>
+        <button id="btnDisc" disabled>Disconnect</button>
+      </div>
+    </div>
+    <div id="deviceInfo" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Device</h2>
+    <div class="row">
+      <button class="act" data-fn="info" disabled>Read info</button>
+      <button class="act" data-fn="reader" disabled>Reader mode</button>
+      <button class="act" data-fn="tag" disabled>Tag mode</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>HF · ISO 14443-A</h2>
+    <div class="row"><button class="act primary" data-fn="hfscan" disabled>Scan HF tag</button></div>
+    <div id="hfResult" style="margin-top:10px"></div>
+
+    <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
+      <div style="font:600 .72rem var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">MIFARE Classic block</div>
+      <div class="row">
+        <input id="mfBlock" type="text" value="0" inputmode="numeric" placeholder="block" style="max-width:74px;flex:0 0 auto">
+        <select id="mfKeyType">
+          <option value="96">Key A</option>
+          <option value="97">Key B</option>
+        </select>
+        <input id="mfKey" type="text" value="FFFFFFFFFFFF" placeholder="key — 6 bytes hex">
+      </div>
+      <div class="row">
+        <input id="mfData" type="text" placeholder="block data — 16 bytes hex (for write)">
+      </div>
+      <div class="row">
+        <button class="act" data-fn="mfread" disabled>Read block</button>
+        <button class="act" data-fn="mffindkey" disabled>Find key (dict)</button>
+        <button class="act" data-fn="mfwrite" disabled>Write block</button>
+      </div>
+      <p class="hint">⚠️ Writing block 0 or a sector trailer with wrong data can permanently lock a card. Check the block and data first.</p>
+    </div>
+
+    <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
+      <div style="font:600 .72rem var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Magic UID · block 0</div>
+      <div class="row">
+        <input id="mfUid" type="text" placeholder="new UID — 4 bytes hex (e.g. DEADBEEF)">
+        <select id="mfMagicType">
+          <option value="gen1a">Gen1a (backdoor)</option>
+          <option value="gen2">Gen2 / CUID</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="act" data-fn="mfbuilduid" disabled>Build block 0</button>
+        <button class="act good" data-fn="mfwriteuid" disabled>Write UID</button>
+      </div>
+      <p class="hint">Build block 0 fills the data field above (UID · BCC · SAK 08 · ATQA 0004 · 8×00 — edit as needed), then Write UID sends it. <b>Gen1a</b> uses the backdoor unlock; <b>Gen2</b> writes block 0 with the key above. A normal (non-magic) card will reject the UID write.</p>
+    </div>
+
+    <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
+      <div style="font:600 .72rem var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Key recovery · nested (WASM)</div>
+      <div class="row" style="align-items:baseline">
+        <span style="font-size:.78rem;color:var(--muted);flex:0 0 auto">Known</span>
+        <input id="nrKnownBlock" type="text" value="3" inputmode="numeric" placeholder="blk" style="max-width:56px;flex:0 0 auto">
+        <select id="nrKnownType"><option value="96">A</option><option value="97">B</option></select>
+        <input id="nrKnownKey" type="text" value="FFFFFFFFFFFF" placeholder="known key — 6 bytes">
+      </div>
+      <div class="row" style="align-items:baseline">
+        <span style="font-size:.78rem;color:var(--muted);flex:0 0 auto">Target</span>
+        <input id="nrTargetBlock" type="text" value="4" inputmode="numeric" placeholder="blk" style="max-width:56px;flex:0 0 auto">
+        <select id="nrTargetType"><option value="96">A</option><option value="97">B</option></select>
+        <button class="act good" data-fn="recovernested" disabled>Recover target key</button>
+      </div>
+      <p class="hint">Needs one known sector key (use <b>Find key</b> first). Detects the tag's PRNG, collects nonces on-device, then cracks the target key in WebAssembly (the firmware's own nested/staticnested solver) and verifies it. Acquisition is probabilistic — re-run if it misses. Hardnested tags aren't supported here.</p>
+    </div>
+
+    <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">
+      <div style="font:600 .72rem var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Key recovery · darkside (no known key)</div>
+      <div class="row" style="align-items:baseline">
+        <span style="font-size:.78rem;color:var(--muted);flex:0 0 auto">Target</span>
+        <input id="nrDsBlock" type="text" value="3" inputmode="numeric" placeholder="blk" style="max-width:56px;flex:0 0 auto">
+        <select id="nrDsType"><option value="96">A</option><option value="97">B</option></select>
+        <button class="act good" data-fn="recoverdarkside" disabled>Darkside recover</button>
+      </div>
+      <p class="hint">Recovers a first key with <b>no</b> key known, for weak-PRNG cards. Acquires repeatedly and intersects candidates in WASM until one verifies (can take several rounds). Fails with <code>CANT_FIX_NT</code> on cards with an unpredictable PRNG — those need hardnested (iOS app).</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>LF · EM410x → T5577</h2>
+    <div class="row">
+      <button class="act primary" data-fn="lfscan" disabled>Scan EM410x</button>
+      <button class="act needid" data-fn="lfwrite" disabled>Write T5577</button>
+      <button class="act needid" data-fn="lfverify" disabled>Verify</button>
+      <button class="act good needid" data-fn="lfclone" disabled>Write + Verify</button>
+    </div>
+    <div id="lfResult" style="margin-top:10px"></div>
+    <p class="hint">Read the source EM410x tag → swap in a blank T5577 → <b>Write + Verify</b> re-reads the card and compares.</p>
+  </div>
+
+  <div class="card">
+    <h2>Raw command</h2>
+    <div class="row">
+      <input id="rawCmd" type="text" placeholder="cmd (e.g. 1000)">
+      <input id="rawData" type="text" placeholder="data hex (optional, e.g. 01)">
+      <button class="act" data-fn="raw" disabled>Send</button>
+    </div>
+    <p class="hint">Enter a command number and optional hex payload. Response is shown in the log.</p>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <div id="log"></div>
+    <div class="row" style="margin-top:8px"><button id="btnClear">Clear log</button></div>
+  </div>
+
+<script>
+"use strict";
+
+// ---- Nordic UART Service UUIDs ----
+const NUS  = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const RXCH = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // write (app -> device)
+const TXCH = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // notify (device -> app)
+
+// ---- Command IDs (from firmware chameleon_enum.py) ----
+const CMD = {
+  GET_APP_VERSION:1000, CHANGE_DEVICE_MODE:1001, GET_DEVICE_MODE:1002,
+  GET_DEVICE_CHIP_ID:1011, GET_BATTERY_INFO:1025,
+  HF14A_SCAN:2000,
+  MF1_DETECT_PRNG:2002, MF1_STATIC_NESTED_ACQUIRE:2003, MF1_DARKSIDE_ACQUIRE:2004,
+  MF1_DETECT_NT_DIST:2005, MF1_NESTED_ACQUIRE:2006, MF1_AUTH_ONE_KEY_BLOCK:2007,
+  MF1_READ_ONE_BLOCK:2008, MF1_WRITE_ONE_BLOCK:2009, HF14A_RAW:2010, MF1_CHECK_KEYS_ON_BLOCK:2015,
+  EM410X_SCAN:3000, EM410X_WRITE_TO_T55XX:3001,
+};
+const STATUS_LABEL = {0x00:"HF tag OK",0x01:"no HF tag",0x06:"MIFARE auth failed",
+  0x40:"LF tag OK",0x41:"no LF tag",0x60:"parity error",0x66:"wrong device mode",
+  0x67:"invalid command",0x68:"success",0x69:"not implemented"};
+
+// ---- T5577 default key set (from firmware CLI) ----
+const T55_NEWKEY  = [0x20,0x20,0x66,0x66];
+const T55_OLDKEYS = [[0x51,0x24,0x36,0x48],[0x19,0x92,0x04,0x27]];
+let lastLfId = null;
+
+// ---- MIFARE Classic ----
+const MF_KEY_A = 0x60, MF_KEY_B = 0x61;
+const MIFARE_DICT = [
+  [0xFF,0xFF,0xFF,0xFF,0xFF,0xFF],[0x00,0x00,0x00,0x00,0x00,0x00],
+  [0xA0,0xA1,0xA2,0xA3,0xA4,0xA5],[0xD3,0xF7,0xD3,0xF7,0xD3,0xF7],
+  [0xB0,0xB1,0xB2,0xB3,0xB4,0xB5],[0x4D,0x3A,0x99,0xC3,0x51,0xDD],
+  [0x1A,0x98,0x2C,0x7E,0x45,0x9A],[0xAA,0xBB,0xCC,0xDD,0xEE,0xFF],
+  [0x71,0x4C,0x5C,0x88,0x6E,0x97],[0x58,0x7E,0xE5,0xF9,0x35,0x0F],
+  [0xA0,0x47,0x8C,0xC3,0x90,0x91],[0x53,0x3C,0xB6,0xC7,0x23,0xF6],
+  [0x8F,0xD0,0xA4,0xF2,0x56,0xE9],
+];
+function parseHexBytes(s){
+  const h=(s||"").replace(/[^0-9a-fA-F]/g,"");
+  const out=[]; for(let i=0;i+1<h.length;i+=2) out.push(parseInt(h.substr(i,2),16));
+  return out;
+}
+
+// ---- Hex helpers ----
+const hex  = b => Array.from(b,x=>x.toString(16).padStart(2,"0").toUpperCase()).join("");
+const hexS = b => Array.from(b,x=>x.toString(16).padStart(2,"0").toUpperCase()).join(" ");
+
+// ---- Frame codec ----
+function lrc(bytes){ let s=0; for(const b of bytes) s=(s+b)&0xff; return (0x100 - s)&0xff; }
+function buildFrame(cmd, data=[]){
+  const d = Uint8Array.from(data);
+  const head = [ (cmd>>8)&0xff, cmd&0xff, 0,0, (d.length>>8)&0xff, d.length&0xff ];
+  const f = [0x11, 0xef, ...head, lrc(head), ...d, lrc(d)];
+  return Uint8Array.from(f);
+}
+
+// ---- Streaming parser ----
+class FrameBuffer{
+  constructor(){ this.buf=[]; }
+  reset(){ this.buf=[]; }
+  push(bytes){ for(const b of bytes) this.buf.push(b); }
+  next(){
+    for(;;){
+      const start = this.buf.indexOf(0x11);
+      if(start<0){ this.buf=[]; return null; }
+      if(start>0) this.buf.splice(0,start);
+      if(this.buf.length<9) return null;
+      if(this.buf[1]!==0xef){ this.buf.shift(); continue; }
+      const cmd    = (this.buf[2]<<8)|this.buf[3];
+      const status = (this.buf[4]<<8)|this.buf[5];
+      const len    = (this.buf[6]<<8)|this.buf[7];
+      const head   = this.buf.slice(2,8);
+      if(lrc(head)!==this.buf[8]){ this.buf.shift(); continue; }
+      const total = 9+len+1;
+      if(this.buf.length<total) return null;
+      const data = this.buf.slice(9,9+len);
+      if(lrc(data)!==this.buf[9+len]){ this.buf.shift(); continue; }
+      this.buf.splice(0,total);
+      return {cmd,status,data:Uint8Array.from(data)};
+    }
+  }
+}
+
+// ---- Transports ----
+class SerialTransport{
+  constructor(onData){ this.onData=onData; this.kind="USB"; }
+  async connect(){
+    this.port = await navigator.serial.requestPort();
+    await this.port.open({baudRate:115200});
+    this.writer = this.port.writable.getWriter();
+    this._read();
+  }
+  async _read(){
+    this.reader = this.port.readable.getReader();
+    try{
+      for(;;){
+        const {value,done} = await this.reader.read();
+        if(done) break;
+        if(value) this.onData(new Uint8Array(value));
+      }
+    }catch(e){ /* closed */ }
+  }
+  async send(bytes){ await this.writer.write(bytes); }
+  async disconnect(){
+    try{ await this.reader?.cancel(); }catch(e){}
+    try{ this.writer?.releaseLock(); }catch(e){}
+    try{ await this.port?.close(); }catch(e){}
+  }
+}
+
+class BleTransport{
+  constructor(onData){ this.onData=onData; this.kind="BLE"; }
+  async connect(){
+    this.device = await navigator.bluetooth.requestDevice({
+      filters:[{services:[NUS]}], optionalServices:[NUS]
+    });
+    const server = await this.device.gatt.connect();
+    const svc = await server.getPrimaryService(NUS);
+    this.rx = await svc.getCharacteristic(RXCH);
+    this.tx = await svc.getCharacteristic(TXCH);
+    await this.tx.startNotifications();
+    this.tx.addEventListener("characteristicvaluechanged", e=>{
+      this.onData(new Uint8Array(e.target.value.buffer));
+    });
+  }
+  async send(bytes){
+    // Chunk to a safe BLE payload size.
+    for(let i=0;i<bytes.length;i+=20){
+      const chunk = bytes.slice(i, i+20);
+      if(this.rx.properties.writeWithoutResponse) await this.rx.writeValueWithoutResponse(chunk);
+      else await this.rx.writeValue(chunk);
+    }
+  }
+  async disconnect(){ try{ this.device?.gatt?.disconnect(); }catch(e){} }
+}
+
+// ---- Device session ----
+const fb = new FrameBuffer();
+let transport = null, pending = null;
+
+function onBytes(bytes){
+  fb.push(bytes);
+  let r;
+  while((r=fb.next())){
+    logLine("rx", `← cmd ${r.cmd}  status 0x${r.status.toString(16).padStart(2,"0")} (${STATUS_LABEL[r.status]||"?"})  ${hexS(r.data)}`);
+    if(pending){ const p=pending; pending=null; clearTimeout(p.timer); p.resolve(r); }
+  }
+}
+
+async function send(cmd, data=[], timeout=5000){
+  if(!transport) throw new Error("not connected");
+  if(pending) throw new Error("a command is already in progress");
+  const frame = buildFrame(cmd, data);
+  logLine("tx", `→ [${cmd}] ${hexS(frame)}`);
+  fb.reset();
+  await transport.send(frame);
+  return new Promise((resolve,reject)=>{
+    pending = {resolve,reject,timer:setTimeout(()=>{pending=null;reject(new Error("device did not respond"));},timeout)};
+  });
+}
+
+// ---- High-level commands ----
+async function setReaderMode(reader){ await send(CMD.CHANGE_DEVICE_MODE,[reader?1:0]); logLine("sys",`Device mode: ${reader?"reader":"tag"}`); }
+
+async function readInfo(){
+  const parts=[];
+  try{ const v=await send(CMD.GET_APP_VERSION); if(v.data.length>=2) parts.push(`fw ${v.data[0]}.${v.data[1]}`);}catch(e){}
+  try{ const c=await send(CMD.GET_DEVICE_CHIP_ID); if(c.data.length) parts.push(`chip ${hex(c.data)}`);}catch(e){}
+  try{ const b=await send(CMD.GET_BATTERY_INFO); if(b.data.length>=3){ const mv=(b.data[0]<<8)|b.data[1]; parts.push(`battery ${b.data[2]}% (${mv} mV)`);} }catch(e){}
+  renderKV("deviceInfo", {Transport:transport.kind, Info:parts.join("  ·  ")||"—"});
+}
+
+function classifyHF(sak, atqa){
+  if(sak & 0x20) return {name:"ISO 14443-4 (DESFire / secure)", clonable:false, note:"Encrypted / mutual-auth — not clonable by any app."};
+  if(sak===0x00) return {name:"NTAG / MIFARE Ultralight", clonable:true, note:"Writable directly (no keys needed)."};
+  if(sak===0x08||sak===0x09) return {name:"MIFARE Classic 1K", clonable:true, note:"Needs sector keys to read; a magic card to write UID."};
+  if(sak===0x18) return {name:"MIFARE Classic 4K", clonable:true, note:"Needs sector keys to read; a magic card to write UID."};
+  return {name:"Unknown HF tag", clonable:false, note:"Couldn't classify from SAK/ATQA."};
+}
+
+async function hfScan(){
+  await setReaderMode(true);
+  const r = await send(CMD.HF14A_SCAN);
+  if(r.status!==0x00 || r.data.length<1){ renderKV("hfResult",{Result:"No HF tag"}); return; }
+  const d=r.data; let o=0;
+  const uidlen=d[o++]; const uid=d.slice(o,o+uidlen); o+=uidlen;
+  const atqa=d.slice(o,o+2); o+=2; const sak=d[o++]; const atslen=d[o++];
+  const ats=atslen>0?d.slice(o,o+atslen):new Uint8Array();
+  const k=classifyHF(sak,atqa);
+  renderKV("hfResult",{UID:hexS(uid),"SAK / ATQA":`${hex([sak])} / ${hexS(atqa)}`,ATS:ats.length?hexS(ats):"—"},
+    {label:k.name, clonable:k.clonable, note:k.note});
+}
+
+async function lfScan(){
+  await setReaderMode(true);
+  const r = await send(CMD.EM410X_SCAN);
+  if(r.status!==0x40 || r.data.length<7){ renderKV("lfResult",{Result:"No EM410x tag"}); return; }
+  const id = Array.from(r.data.slice(2,7)); // skip 2-byte type prefix
+  lastLfId = id;
+  renderKV("lfResult",{"EM410x ID":hexS(id)});
+  refreshNeedId();
+}
+
+async function lfWrite(){
+  if(!lastLfId){ logLine("err","Scan an EM410x tag first."); return false; }
+  await setReaderMode(true);
+  // EM410X_WRITE_TO_T55XX payload: id(5) | new_key(4) | old_keys(2 x 4)
+  const payload = [...lastLfId, ...T55_NEWKEY, ...T55_OLDKEYS[0], ...T55_OLDKEYS[1]];
+  const r = await send(CMD.EM410X_WRITE_TO_T55XX, payload, 8000);
+  const ok = r.status===0x40;
+  logLine(ok?"sys":"err", ok?"Write OK (EM4100 preset written to T5577).":("Write failed: "+(STATUS_LABEL[r.status]||r.status)));
+  return ok;
+}
+
+async function lfVerify(){
+  if(!lastLfId){ logLine("err","Nothing to verify — scan or write first."); return false; }
+  logLine("sys","Verifying — scanning the card back…");
+  await setReaderMode(true);
+  const r = await send(CMD.EM410X_SCAN);
+  if(r.status!==0x40 || r.data.length<7){ logLine("err","Verify: FAIL ❌ (no tag detected)"); return false; }
+  const id = Array.from(r.data.slice(2,7));
+  const ok = hex(id)===hex(lastLfId);
+  logLine(ok?"sys":"err", ok ? "Verify: PASS ✅" : `Verify: FAIL ❌ (read ${hexS(id)}, expected ${hexS(lastLfId)})`);
+  return ok;
+}
+
+async function lfClone(){ if(await lfWrite()) await lfVerify(); }
+
+// ---- MIFARE Classic read / write / dictionary ----
+function mfInputs(){
+  const block = parseInt(document.getElementById("mfBlock").value,10);
+  const keyType = parseInt(document.getElementById("mfKeyType").value,10); // 96=A, 97=B
+  const key = parseHexBytes(document.getElementById("mfKey").value);
+  return {block, keyType, key, ktName: keyType===MF_KEY_A?"A":"B"};
+}
+async function mfRead(){
+  const {block,keyType,key,ktName} = mfInputs();
+  if(Number.isNaN(block)){ logLine("err","Enter a block number."); return; }
+  if(key.length!==6){ logLine("err","Key must be 6 bytes (12 hex chars)."); return; }
+  await setReaderMode(true);
+  const r = await send(CMD.MF1_READ_ONE_BLOCK, [keyType, block, ...key]);
+  if(r.status===0x00 && r.data.length===16){
+    logLine("sys", `Block ${block} (key ${ktName}): ${hexS(r.data)}`);
+    document.getElementById("mfData").value = hex(r.data);
+  } else logLine("err", `Read block ${block} failed: ${STATUS_LABEL[r.status]||r.status}`);
+}
+async function mfWrite(){
+  const {block,keyType,key,ktName} = mfInputs();
+  const data = parseHexBytes(document.getElementById("mfData").value);
+  if(Number.isNaN(block)){ logLine("err","Enter a block number."); return; }
+  if(key.length!==6){ logLine("err","Key must be 6 bytes."); return; }
+  if(data.length!==16){ logLine("err","Block data must be 16 bytes (32 hex chars)."); return; }
+  await setReaderMode(true);
+  const r = await send(CMD.MF1_WRITE_ONE_BLOCK, [keyType, block, ...key, ...data]);
+  logLine(r.status===0x00?"sys":"err",
+    r.status===0x00 ? `Wrote block ${block} (key ${ktName}).` : `Write block ${block} failed: ${STATUS_LABEL[r.status]||r.status}`);
+}
+async function mfFindKey(){
+  const {block,keyType,ktName} = mfInputs();
+  if(Number.isNaN(block)){ logLine("err","Enter a block number."); return; }
+  await setReaderMode(true);
+  logLine("sys", `Trying ${MIFARE_DICT.length}-key dictionary on block ${block} (key ${ktName})…`);
+  // MF1_CHECK_KEYS_ON_BLOCK payload: block(1) | keyType(1) | nKeys(1) | keys(6 each)
+  const data = [block, keyType, MIFARE_DICT.length, ...MIFARE_DICT.flat()];
+  const r = await send(CMD.MF1_CHECK_KEYS_ON_BLOCK, data, 15000);
+  if(r.data.length>=7 && r.data[0]!==0){
+    const key = r.data.slice(1,7);
+    logLine("sys", `Found key ${ktName} for block ${block}: ${hex(key)}`);
+    document.getElementById("mfKey").value = hex(key);
+  } else logLine("err", `No dictionary key for block ${block} (key ${ktName}). Needs nested/darkside (iOS app).`);
+}
+
+// ---- Magic card UID (block 0) write ----
+// hf14a_raw options bitfield (BigEndian): activate|wait|append_crc|auto_select|keep|check_crc
+function rawOptions(o){
+  return ((o.activate?1:0)<<7)|((o.wait?1:0)<<6)|((o.crc?1:0)<<5)|((o.autosel?1:0)<<4)|((o.keep?1:0)<<3)|((o.checkcrc?1:0)<<2);
+}
+async function hf14aRaw(opts, data=[], bitlen=null, timeout=1000){
+  const bits = (bitlen==null) ? data.length*8 : bitlen;
+  // payload: options(1) | timeout_ms(2 BE) | bitlen(2 BE) | data
+  const payload = [rawOptions(opts), (timeout>>8)&0xff, timeout&0xff, (bits>>8)&0xff, bits&0xff, ...data];
+  return await send(CMD.HF14A_RAW, payload, timeout+2000);
+}
+function buildBlock0(uid){
+  const bcc = uid[0]^uid[1]^uid[2]^uid[3];
+  // UID(4) | BCC(1) | SAK 08 | ATQA 04 00 | 8 x manufacturer (00)
+  return [...uid, bcc, 0x08, 0x04, 0x00, 0,0,0,0,0,0,0,0];
+}
+function mfBuildUid(){
+  const uid = parseHexBytes(document.getElementById("mfUid").value);
+  if(uid.length!==4){ logLine("err","UID must be 4 bytes (8 hex chars)."); return; }
+  const b0 = buildBlock0(uid);
+  document.getElementById("mfBlock").value = "0";
+  document.getElementById("mfData").value = hex(b0);
+  logLine("sys", `Block 0 built: ${hexS(b0)}  (BCC ${hex([b0[4]])})`);
+}
+async function gen1aWriteBlock(block, data16){
+  // unlock 1: 0x40 as 7 bits, keep field on
+  let r = await hf14aRaw({activate:1,wait:1,keep:1}, [0x40], 7, 1000);
+  if(!(r.data.length && r.data[0]===0x0A)){ logLine("err","Gen1A unlock 1 failed — not a Gen1a magic card?"); return false; }
+  // unlock 2: 0x43
+  r = await hf14aRaw({activate:1,wait:1,keep:1}, [0x43], null, 1000);
+  if(!(r.data.length && r.data[0]===0x0A)){ logLine("err","Gen1A unlock 2 failed."); return false; }
+  // write command 0xA0 <block> (with CRC)
+  r = await hf14aRaw({activate:1,wait:1,keep:1,crc:1,checkcrc:1}, [0xA0, block], null, 1000);
+  if(!(r.data.length && r.data[0]===0x0A)){ logLine("err",`Gen1A write command not ACKed for block ${block}.`); return false; }
+  // send 16 data bytes (with CRC)
+  r = await hf14aRaw({activate:1,wait:1,keep:1,crc:1,checkcrc:1}, data16, null, 1000);
+  const ok = r.data.length && r.data[0]===0x0A;
+  // drop the RF field
+  await hf14aRaw({activate:1,wait:0,keep:0}, [], null, 100);
+  logLine(ok?"sys":"err", ok ? `Gen1A wrote block ${block}.` : `Gen1A data not ACKed for block ${block}.`);
+  return ok;
+}
+async function mfWriteUid(){
+  const data = parseHexBytes(document.getElementById("mfData").value);
+  if(data.length!==16){ logLine("err","Block 0 must be 16 bytes — tap Build block 0 first."); return; }
+  const type = document.getElementById("mfMagicType").value;
+  await setReaderMode(true);
+  if(type==="gen1a"){
+    await gen1aWriteBlock(0, data);
+  } else {
+    const key = parseHexBytes(document.getElementById("mfKey").value);
+    if(key.length!==6){ logLine("err","Gen2 needs a 6-byte key (block-0 sector key)."); return; }
+    const kt = parseInt(document.getElementById("mfKeyType").value,10);
+    const r = await send(CMD.MF1_WRITE_ONE_BLOCK, [kt, 0, ...key, ...data]);
+    logLine(r.status===0x00?"sys":"err",
+      r.status===0x00 ? "Gen2: wrote UID to block 0." : `Gen2 write failed: ${STATUS_LABEL[r.status]||r.status}`);
+  }
+}
+
+async function rawSend(){
+  const cmd = parseInt(document.getElementById("rawCmd").value,10);
+  if(Number.isNaN(cmd)){ logLine("err","Enter a numeric command id."); return; }
+  const dtxt = document.getElementById("rawData").value.replace(/[^0-9a-fA-F]/g,"");
+  const data = []; for(let i=0;i+1<dtxt.length;i+=2) data.push(parseInt(dtxt.substr(i,2),16));
+  await send(cmd, data);
+}
+
+// ---- Nested key recovery (WASM solvers) ----
+const u32be = (d,o) => (((d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3])>>>0);
+async function runSolver(name, src, args){
+  if(!window[name]){
+    await new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src;
+      s.onload=res; s.onerror=()=>rej(new Error("failed to load "+src)); document.head.appendChild(s); });
+  }
+  const out=[];
+  const mod = await window[name]({ print:s=>out.push(s), printErr:()=>{} });
+  try { mod.callMain(args.map(String)); }
+  catch(e){ if(!(e && e.status!==undefined)) logLine("err","solver error: "+e); } // ExitStatus is normal
+  const keys=[];
+  for(const line of out){ const m=line.match(/([a-fA-F0-9]{12})/); if(m) keys.push(m[1].toUpperCase()); }
+  return keys;
+}
+async function recoverNested(){
+  const v = id => document.getElementById(id).value;
+  const kBlock=parseInt(v("nrKnownBlock"),10), kType=parseInt(v("nrKnownType"),10), kKey=parseHexBytes(v("nrKnownKey"));
+  const tBlock=parseInt(v("nrTargetBlock"),10), tType=parseInt(v("nrTargetType"),10);
+  if(Number.isNaN(kBlock)||Number.isNaN(tBlock)){ logLine("err","Enter known and target block numbers."); return; }
+  if(kKey.length!==6){ logLine("err","Known key must be 6 bytes (12 hex chars)."); return; }
+  await setReaderMode(true);
+
+  // 1) detect PRNG vulnerability level
+  const prng = await send(CMD.MF1_DETECT_PRNG);
+  if(prng.status!==0x00 || prng.data.length<1){ logLine("err","PRNG detect failed: "+(STATUS_LABEL[prng.status]||prng.status)); return; }
+  const lvl = prng.data[0];
+  logLine("sys", `NT vulnerability: ${lvl===0?"static":lvl===1?"weak (nested)":lvl===2?"hard (hardnested)":"unknown ("+lvl+")"}`);
+  if(lvl===2){ logLine("err","Hardnested required — not supported in this build (use the iOS app)."); return; }
+
+  let args, mod, src;
+  if(lvl===0){
+    // static nested
+    const r = await send(CMD.MF1_STATIC_NESTED_ACQUIRE, [kType,kBlock,...kKey,tType,tBlock], 20000);
+    if(r.status!==0x00 || r.data.length<12){ logLine("err","Static-nested acquire failed: "+(STATUS_LABEL[r.status]||r.status)); return; }
+    const uid=u32be(r.data,0);
+    args=[uid, tType];
+    for(let o=4;o+8<=r.data.length;o+=8){ args.push(u32be(r.data,o), u32be(r.data,o+4)); }
+    logLine("sys", `Acquired ${(r.data.length-4)/8} static nonces (uid ${(uid>>>0).toString(16).toUpperCase()}).`);
+    mod="StaticNestedModule"; src="wasm/staticnested.js";
+  } else {
+    // dynamic nested: need nt distance first
+    const d = await send(CMD.MF1_DETECT_NT_DIST, [kType,kBlock,...kKey], 20000);
+    if(d.status!==0x00 || d.data.length<8){ logLine("err","NT-distance detect failed: "+(STATUS_LABEL[d.status]||d.status)); return; }
+    const uid=u32be(d.data,0), dist=u32be(d.data,4);
+    const r = await send(CMD.MF1_NESTED_ACQUIRE, [kType,kBlock,...kKey,tType,tBlock], 20000);
+    if(r.status!==0x00 || r.data.length<9){ logLine("err","Nested acquire failed: "+(STATUS_LABEL[r.status]||r.status)); return; }
+    args=[uid, dist]; let n=0;
+    for(let o=0;o+9<=r.data.length;o+=9){ args.push(u32be(r.data,o), u32be(r.data,o+4), r.data[o+8]); n++; }
+    logLine("sys", `Acquired ${n} nested nonces (uid ${(uid>>>0).toString(16).toUpperCase()}, dist ${dist}).`);
+    mod="NestedModule"; src="wasm/nested.js";
+  }
+
+  logLine("sys","Cracking in WebAssembly…");
+  let keys;
+  try { keys = await runSolver(mod, src, args); }
+  catch(e){ logLine("err","Solver failed to load: "+e.message); return; }
+  if(!keys.length){ logLine("err","No key recovered — acquisition is probabilistic, try again."); return; }
+
+  logLine("sys", `${keys.length} candidate key(s); verifying on card…`);
+  for(const k of keys){
+    const a = await send(CMD.MF1_AUTH_ONE_KEY_BLOCK, [tType, tBlock, ...parseHexBytes(k)]);
+    if(a.status===0x00){
+      logLine("sys", `✅ Recovered key ${tType===MF_KEY_A?"A":"B"} for block ${tBlock}: ${k}`);
+      document.getElementById("mfKey").value=k;
+      document.getElementById("mfBlock").value=String(tBlock);
+      document.getElementById("mfKeyType").value=String(tType);
+      return;
+    }
+  }
+  logLine("err","Candidates found but none verified on the card — re-run acquire.");
+}
+
+// ---- Darkside key recovery (no known key) ----
+const u64be = (d,o) => { let r=0n; for(let i=0;i<8;i++) r=(r<<8n)|BigInt(d[o+i]); return r; };
+const DARKSIDE_STATUS = {1:"CANT_FIX_NT (unpredictable PRNG — needs hardnested)",2:"LUCKY_AUTH_OK (a default key worked)",3:"NO_NAK_SENT",4:"TAG_CHANGED (tag moved/removed)"};
+async function recoverDarkside(){
+  const v = id => document.getElementById(id).value;
+  const block = parseInt(v("nrDsBlock"),10), type = parseInt(v("nrDsType"),10);
+  if(Number.isNaN(block)){ logLine("err","Enter a target block."); return; }
+  await setReaderMode(true);
+  logLine("sys","Darkside: acquiring (no known key needed)…");
+
+  const list = [];
+  let firstRecover = 1;
+  const MAX_RETRY = 20;
+  for(let retry=0; retry<MAX_RETRY; retry++){
+    // MF1_DARKSIDE_ACQUIRE payload: type_target, block_target, first_recover, sync_max(30)
+    const r = await send(CMD.MF1_DARKSIDE_ACQUIRE, [type, block, firstRecover, 30], 60000);
+    firstRecover = 0;
+    if(r.data.length < 33){ logLine("err","Darkside acquire: short response."); return; }
+    const dstatus = r.data[0];
+    if(dstatus !== 0){ logLine("err","Darkside stopped: "+(DARKSIDE_STATUS[dstatus]||("status "+dstatus))); return; }
+
+    // response !BIIQQII: status(1) uid(4) nt1(4) par(8) ks1(8) nr(4) ar(4)
+    const uid = u32be(r.data,1);
+    const item = { nt1:u32be(r.data,5), par:u64be(r.data,9), ks1:u64be(r.data,17), nr:u32be(r.data,25), ar:u32be(r.data,29) };
+    if(item.par !== 0n) list.length = 0; // NXP tag workaround (matches CLI)
+    list.push(item);
+
+    // darkside args: uid, then per set: nt1 ks1 par nr ar
+    const args = [uid];
+    for(const it of list){ args.push(it.nt1, it.ks1.toString(), it.par.toString(), it.nr, it.ar); }
+
+    const keys = await runSolver("DarksideModule","wasm/darkside.js",args);
+    if(!keys.length){ logLine("sys",`No key yet (${list.length} set${list.length>1?"s":""}), retrying (${retry+1})…`); continue; }
+
+    logLine("sys",`${keys.length} candidate(s); verifying on card…`);
+    for(const k of keys){
+      const a = await send(CMD.MF1_AUTH_ONE_KEY_BLOCK, [type, block, ...parseHexBytes(k)]);
+      if(a.status===0x00){
+        logLine("sys",`✅ Darkside recovered key ${type===MF_KEY_A?"A":"B"} for block ${block}: ${k}`);
+        document.getElementById("mfKey").value=k;
+        document.getElementById("mfBlock").value=String(block);
+        document.getElementById("mfKeyType").value=String(type);
+        return;
+      }
+    }
+    logLine("sys",`Candidates didn't verify, retrying (${retry+1})…`);
+  }
+  logLine("err","Darkside: no key recovered after max retries.");
+}
+
+// ---- UI ----
+function renderKV(id, kv, badge){
+  const el=document.getElementById(id); el.innerHTML="";
+  for(const [k,v] of Object.entries(kv)){
+    const row=document.createElement("div"); row.className="kv";
+    row.innerHTML=`<span class="k">${k}</span><span class="v">${v}</span>`;
+    el.appendChild(row);
+  }
+  if(badge){
+    const row=document.createElement("div"); row.className="kv";
+    row.innerHTML=`<span class="k">Type</span><span class="v"><span class="pill ${badge.clonable?'ok':'no'}">${badge.clonable?'clonable':'not clonable'}</span> ${badge.label}</span>`;
+    el.appendChild(row);
+    const n=document.createElement("div"); n.className="hint"; n.textContent=badge.note; el.appendChild(n);
+  }
+}
+function logLine(cls, text){
+  const log=document.getElementById("log");
+  const span=document.createElement("div"); span.className="log-"+cls; span.textContent=text;
+  log.appendChild(span); log.scrollTop=log.scrollHeight;
+}
+function setConnected(on, label){
+  document.getElementById("dot").className = "dot"+(on?" on":"");
+  document.getElementById("statusText").textContent = label;
+  document.getElementById("btnDisc").disabled = !on;
+  document.getElementById("btnUsb").disabled = on;
+  document.getElementById("btnBle").disabled = on;
+  document.querySelectorAll(".act").forEach(b=>b.disabled=!on);
+  refreshNeedId();
+}
+function refreshNeedId(){
+  const en = !!transport && !!lastLfId;
+  document.querySelectorAll(".needid").forEach(b=>b.disabled=!en);
+}
+
+async function connect(kind){
+  try{
+    transport = kind==="usb" ? new SerialTransport(onBytes) : new BleTransport(onBytes);
+    logLine("sys", `Connecting over ${transport.kind}…`);
+    await transport.connect();
+    setConnected(true, `Connected (${transport.kind})`);
+    logLine("sys","Connected.");
+    await readInfo();
+  }catch(e){
+    logLine("err","Connect failed: "+e.message);
+    transport=null; setConnected(false,"Not connected");
+  }
+}
+
+async function runFn(fn){
+  try{
+    if(fn==="info") await readInfo();
+    else if(fn==="reader") await setReaderMode(true);
+    else if(fn==="tag") await setReaderMode(false);
+    else if(fn==="hfscan") await hfScan();
+    else if(fn==="lfscan") await lfScan();
+    else if(fn==="lfwrite") await lfWrite();
+    else if(fn==="lfverify") await lfVerify();
+    else if(fn==="lfclone") await lfClone();
+    else if(fn==="mfread") await mfRead();
+    else if(fn==="mfwrite") await mfWrite();
+    else if(fn==="mffindkey") await mfFindKey();
+    else if(fn==="mfbuilduid") mfBuildUid();
+    else if(fn==="mfwriteuid") await mfWriteUid();
+    else if(fn==="recovernested") await recoverNested();
+    else if(fn==="recoverdarkside") await recoverDarkside();
+    else if(fn==="raw") await rawSend();
+  }catch(e){ logLine("err", (fn+" error: ")+e.message); }
+}
+
+// ---- Wire up + compatibility ----
+document.getElementById("btnUsb").onclick=()=>connect("usb");
+document.getElementById("btnBle").onclick=()=>connect("ble");
+document.getElementById("btnDisc").onclick=async()=>{ await transport?.disconnect(); transport=null; setConnected(false,"Not connected"); logLine("sys","Disconnected."); };
+document.getElementById("btnClear").onclick=()=>{document.getElementById("log").innerHTML="";};
+document.querySelectorAll(".act").forEach(b=>b.onclick=()=>runFn(b.dataset.fn));
+
+(function compat(){
+  const hasSerial = "serial" in navigator;
+  const hasBle = "bluetooth" in navigator;
+  const secure = window.isSecureContext;
+  const msgs=[];
+  if(!secure) msgs.push("This page must be served over <b>HTTPS</b> or <code>localhost</code> — WebSerial/WebBLE are disabled on insecure origins.");
+  if(!hasSerial) { msgs.push("<b>WebSerial not available</b> (USB connect disabled). Use Chrome/Edge on desktop."); document.getElementById("btnUsb").disabled=true; }
+  if(!hasBle) { msgs.push("<b>Web Bluetooth not available</b> (BLE connect disabled). Not supported in Safari/iOS."); document.getElementById("btnBle").disabled=true; }
+  if(msgs.length){ const el=document.getElementById("compat"); el.hidden=false; el.innerHTML=msgs.join("<br>"); }
+})();
+</script>
+</body>
+</html>

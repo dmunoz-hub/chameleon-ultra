@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Xcode / iOS
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/.cxx/
+*.apk
+*.aab
+
+# Node (Vercel CLI)
+web/node_modules/
+.vercel/

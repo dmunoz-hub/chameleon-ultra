@@ -1,0 +1,384 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A40128027A2557684EF62A7 /* parity.c in Sources */ = {isa = PBXBuildFile; fileRef = 6AE4582527B0E12131CFA2D9 /* parity.c */; };
+		1D21FB5E33AC4AF3D72A9576 /* ChameleonLFApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6B8FAFAA70162D5F5AC71D /* ChameleonLFApp.swift */; };
+		367EADD59714322F57B9D527 /* nested_util.c in Sources */ = {isa = PBXBuildFile; fileRef = 6747F85C383D923D79EAC414 /* nested_util.c */; };
+		4313EDD5CADDA53B00AAEF99 /* crapto1.c in Sources */ = {isa = PBXBuildFile; fileRef = 19C663F7D8AF206EB82AFB87 /* crapto1.c */; };
+		54B9372C65E93161017E9EA7 /* ChameleonBLE.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE231BFE3014ECDCA1E944AE /* ChameleonBLE.swift */; };
+		626A6F4CF0AD492808DD2E28 /* mfkey.c in Sources */ = {isa = PBXBuildFile; fileRef = 356B2146395E9272B7E65C95 /* mfkey.c */; };
+		8F5F93325F7EDC91FA72139D /* KeyRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257C0D18CCD2052DFAD7998A /* KeyRecovery.swift */; };
+		9FECF997CDC43B8817FED541 /* crypto1.c in Sources */ = {isa = PBXBuildFile; fileRef = 2232D98890FA71038CB29027 /* crypto1.c */; };
+		AFFC0B28ED15AD2C49565B4E /* solver_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = F836428EDD54C00E0C1B3442 /* solver_shim.c */; };
+		B2E86A2783776254F0E766AA /* ChameleonController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F960668215A4A0D71E7CEDCC /* ChameleonController.swift */; };
+		C674B2F443B761E2B9350D98 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B638ECD6131092BE662CCE61 /* ContentView.swift */; };
+		C6B75C23FF8A58A119F6C0B3 /* common.c in Sources */ = {isa = PBXBuildFile; fileRef = 4031682CD0F63F274001F9D9 /* common.c */; };
+		CA42E6C6FB9359A2300E548B /* bucketsort.c in Sources */ = {isa = PBXBuildFile; fileRef = 03B4300794C381C7D7D91C9B /* bucketsort.c */; };
+		E9E056B16BBA14383E847457 /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E9F1E7AABAA13FE2C36BDF /* Protocol.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		03B4300794C381C7D7D91C9B /* bucketsort.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bucketsort.c; sourceTree = "<group>"; };
+		19C663F7D8AF206EB82AFB87 /* crapto1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = crapto1.c; sourceTree = "<group>"; };
+		21EE60A0E587256780BCA6B9 /* solver_shim.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = solver_shim.h; sourceTree = "<group>"; };
+		2232D98890FA71038CB29027 /* crypto1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = crypto1.c; sourceTree = "<group>"; };
+		257C0D18CCD2052DFAD7998A /* KeyRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRecovery.swift; sourceTree = "<group>"; };
+		33109F592CBF51EBC4A0FCF6 /* parity.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = parity.h; sourceTree = "<group>"; };
+		356B2146395E9272B7E65C95 /* mfkey.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mfkey.c; sourceTree = "<group>"; };
+		3D768713D9F16F4CDEDA2425 /* ChameleonLF.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ChameleonLF.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4031682CD0F63F274001F9D9 /* common.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = common.c; sourceTree = "<group>"; };
+		407304DBF668A8079769CAF5 /* common.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = common.h; sourceTree = "<group>"; };
+		4C6B8FAFAA70162D5F5AC71D /* ChameleonLFApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonLFApp.swift; sourceTree = "<group>"; };
+		553FEE550E9B075FD31FDD56 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		55B9D8AE5260037EC3561963 /* crapto1.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = crapto1.h; sourceTree = "<group>"; };
+		6747F85C383D923D79EAC414 /* nested_util.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = nested_util.c; sourceTree = "<group>"; };
+		6AE4582527B0E12131CFA2D9 /* parity.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = parity.c; sourceTree = "<group>"; };
+		849DCAAF54457F44A2C7E8EB /* mfkey.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mfkey.h; sourceTree = "<group>"; };
+		986E7B38E82299B69FF8A844 /* nested_util.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = nested_util.h; sourceTree = "<group>"; };
+		A53E59BF8A042D3B86258A77 /* bucketsort.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bucketsort.h; sourceTree = "<group>"; };
+		B638ECD6131092BE662CCE61 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		C63F3DCEC357049B8814B190 /* ChameleonLF-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ChameleonLF-Bridging-Header.h"; sourceTree = "<group>"; };
+		E6E9F1E7AABAA13FE2C36BDF /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protocol.swift; sourceTree = "<group>"; };
+		EE231BFE3014ECDCA1E944AE /* ChameleonBLE.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonBLE.swift; sourceTree = "<group>"; };
+		F836428EDD54C00E0C1B3442 /* solver_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = solver_shim.c; sourceTree = "<group>"; };
+		F960668215A4A0D71E7CEDCC /* ChameleonController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonController.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		7EEA75767CAD72B9D36B8E08 = {
+			isa = PBXGroup;
+			children = (
+				F962808781CA6FC88BD86556 /* ChameleonLF */,
+				828C29722AB355F9026C5CB5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		828C29722AB355F9026C5CB5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3D768713D9F16F4CDEDA2425 /* ChameleonLF.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C442F587E4609F5D7EE096FC /* Solver */ = {
+			isa = PBXGroup;
+			children = (
+				03B4300794C381C7D7D91C9B /* bucketsort.c */,
+				A53E59BF8A042D3B86258A77 /* bucketsort.h */,
+				4031682CD0F63F274001F9D9 /* common.c */,
+				407304DBF668A8079769CAF5 /* common.h */,
+				19C663F7D8AF206EB82AFB87 /* crapto1.c */,
+				55B9D8AE5260037EC3561963 /* crapto1.h */,
+				2232D98890FA71038CB29027 /* crypto1.c */,
+				356B2146395E9272B7E65C95 /* mfkey.c */,
+				849DCAAF54457F44A2C7E8EB /* mfkey.h */,
+				6747F85C383D923D79EAC414 /* nested_util.c */,
+				986E7B38E82299B69FF8A844 /* nested_util.h */,
+				6AE4582527B0E12131CFA2D9 /* parity.c */,
+				33109F592CBF51EBC4A0FCF6 /* parity.h */,
+				F836428EDD54C00E0C1B3442 /* solver_shim.c */,
+				21EE60A0E587256780BCA6B9 /* solver_shim.h */,
+			);
+			path = Solver;
+			sourceTree = "<group>";
+		};
+		F962808781CA6FC88BD86556 /* ChameleonLF */ = {
+			isa = PBXGroup;
+			children = (
+				EE231BFE3014ECDCA1E944AE /* ChameleonBLE.swift */,
+				F960668215A4A0D71E7CEDCC /* ChameleonController.swift */,
+				C63F3DCEC357049B8814B190 /* ChameleonLF-Bridging-Header.h */,
+				4C6B8FAFAA70162D5F5AC71D /* ChameleonLFApp.swift */,
+				B638ECD6131092BE662CCE61 /* ContentView.swift */,
+				553FEE550E9B075FD31FDD56 /* Info.plist */,
+				257C0D18CCD2052DFAD7998A /* KeyRecovery.swift */,
+				E6E9F1E7AABAA13FE2C36BDF /* Protocol.swift */,
+				C442F587E4609F5D7EE096FC /* Solver */,
+			);
+			path = ChameleonLF;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E98D5CE597C656FABE5FCAE7 /* ChameleonLF */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 47485CAAFF9C3AD157CF7695 /* Build configuration list for PBXNativeTarget "ChameleonLF" */;
+			buildPhases = (
+				E2AA7EFC3B4E6A18AE7F589C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ChameleonLF;
+			packageProductDependencies = (
+			);
+			productName = ChameleonLF;
+			productReference = 3D768713D9F16F4CDEDA2425 /* ChameleonLF.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E7B672C8B6C3668AB0668AA6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					E98D5CE597C656FABE5FCAE7 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8B2F0334E52CF254382221DF /* Build configuration list for PBXProject "ChameleonLF" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 7EEA75767CAD72B9D36B8E08;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 828C29722AB355F9026C5CB5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E98D5CE597C656FABE5FCAE7 /* ChameleonLF */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E2AA7EFC3B4E6A18AE7F589C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				54B9372C65E93161017E9EA7 /* ChameleonBLE.swift in Sources */,
+				B2E86A2783776254F0E766AA /* ChameleonController.swift in Sources */,
+				1D21FB5E33AC4AF3D72A9576 /* ChameleonLFApp.swift in Sources */,
+				C674B2F443B761E2B9350D98 /* ContentView.swift in Sources */,
+				8F5F93325F7EDC91FA72139D /* KeyRecovery.swift in Sources */,
+				E9E056B16BBA14383E847457 /* Protocol.swift in Sources */,
+				CA42E6C6FB9359A2300E548B /* bucketsort.c in Sources */,
+				C6B75C23FF8A58A119F6C0B3 /* common.c in Sources */,
+				4313EDD5CADDA53B00AAEF99 /* crapto1.c in Sources */,
+				9FECF997CDC43B8817FED541 /* crypto1.c in Sources */,
+				626A6F4CF0AD492808DD2E28 /* mfkey.c in Sources */,
+				367EADD59714322F57B9D527 /* nested_util.c in Sources */,
+				0A40128027A2557684EF62A7 /* parity.c in Sources */,
+				AFFC0B28ED15AD2C49565B4E /* solver_shim.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		041D4AD47B3D6718D29C5C68 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		1F8D61C37EDFAD64B85D1F5B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		901CAF2CB8777992322762E2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GCC_WARN_INHIBIT_ALL_WARNINGS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/ChameleonLF/Solver";
+				INFOPLIST_FILE = ChameleonLF/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.chameleonlf;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "ChameleonLF/ChameleonLF-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B0580AA1C6C16A996D30615E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GCC_WARN_INHIBIT_ALL_WARNINGS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/ChameleonLF/Solver";
+				INFOPLIST_FILE = ChameleonLF/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.chameleonlf;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "ChameleonLF/ChameleonLF-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		47485CAAFF9C3AD157CF7695 /* Build configuration list for PBXNativeTarget "ChameleonLF" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				901CAF2CB8777992322762E2 /* Debug */,
+				B0580AA1C6C16A996D30615E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8B2F0334E52CF254382221DF /* Build configuration list for PBXProject "ChameleonLF" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1F8D61C37EDFAD64B85D1F5B /* Debug */,
+				041D4AD47B3D6718D29C5C68 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E7B672C8B6C3668AB0668AA6 /* Project object */;
+}
