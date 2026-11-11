@@ -743,9 +743,9 @@ async function emulateHF(){
   const r = await send(CMD.HF14A_SET_ANTI_COLL_DATA, p);
   if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
-  await send(CMD.CHANGE_DEVICE_MODE, [0]);
-  logLine("sys", `Emulating UID ${hexS(lastHF.uid)} on slot ${slot+1} (tag mode). Present the HF antenna to a reader.`);
   await loadSlots();
+  await send(CMD.CHANGE_DEVICE_MODE, [0]); // tag mode — last
+  logLine("sys", `Emulating UID ${hexS(lastHF.uid)} on slot ${slot+1} (tag mode). Present the HF antenna to a reader.`);
 }
 async function emulateLF(){
   if(!lastLfId){ logLine("err", "Read an EM410x tag first (LF section)."); return; }
@@ -758,9 +758,9 @@ async function emulateLF(){
   const r = await send(CMD.EM410X_SET_EMU_ID, Array.from(lastLfId));
   if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
-  await send(CMD.CHANGE_DEVICE_MODE, [0]);
-  logLine("sys", `Emulating EM410x ${hexS(lastLfId)} on slot ${slot+1} (tag mode). Present the LF antenna to a reader.`);
   await loadSlots();
+  await send(CMD.CHANGE_DEVICE_MODE, [0]); // tag mode — last
+  logLine("sys", `Emulating EM410x ${hexS(lastLfId)} on slot ${slot+1} (tag mode). Present the LF antenna to a reader.`);
 }
 
 // ---- UI ----

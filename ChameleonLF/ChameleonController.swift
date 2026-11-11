@@ -659,9 +659,9 @@ final class ChameleonController: ObservableObject {
             let r = try await self.ble.send(.hf14aSetAntiColl, data: p)
             guard r.genericOk else { self.line("Set anti-coll failed (\(r.statusEnum.label))."); return }
             _ = try await self.ble.send(.slotDataConfigSave)
-            _ = try await self.ble.send(.changeDeviceMode, data: [0])
+            try await self.loadSlotsInner()                       // refresh while still responsive
+            _ = try await self.ble.send(.changeDeviceMode, data: [0]) // tag mode — do this LAST
             self.line("Emulating UID \(ChameleonFrame.hexSpaced(t.uid)) on slot \(self.activeSlot + 1) (tag mode). Present the HF antenna to a reader.")
-            try await self.loadSlotsInner()
         }
     }
 
@@ -673,9 +673,9 @@ final class ChameleonController: ObservableObject {
             let r = try await self.ble.send(.em410xSetEmuId, data: id)
             guard r.genericOk else { self.line("Set EM410x emu id failed (\(r.statusEnum.label))."); return }
             _ = try await self.ble.send(.slotDataConfigSave)
-            _ = try await self.ble.send(.changeDeviceMode, data: [0])
+            try await self.loadSlotsInner()                       // refresh while still responsive
+            _ = try await self.ble.send(.changeDeviceMode, data: [0]) // tag mode — do this LAST
             self.line("Emulating EM410x \(ChameleonFrame.hexSpaced(id)) on slot \(self.activeSlot + 1) (tag mode). Present the LF antenna to a reader.")
-            try await self.loadSlotsInner()
         }
     }
 }

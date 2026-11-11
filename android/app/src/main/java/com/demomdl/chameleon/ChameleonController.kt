@@ -398,9 +398,9 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         val r = ble.send(Cmd.HF14A_SET_ANTI_COLL_DATA, p.toByteArray())
         if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return@run }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
-        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
+        loadSlotsInner()                                 // refresh while still responsive
+        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0)) // tag mode — last
         log("Emulating UID ${t.uid.hexSpaced()} on slot ${slot + 1} (tag mode). Present the HF antenna to a reader.")
-        loadSlotsInner()
     }
 
     fun emulateLF() = run("Emulate LF") {
@@ -411,9 +411,9 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         val r = ble.send(Cmd.EM410X_SET_EMU_ID, id)
         if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return@run }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
-        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
+        loadSlotsInner()                                 // refresh while still responsive
+        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0)) // tag mode — last
         log("Emulating EM410x ${id.hexSpaced()} on slot ${slot + 1} (tag mode). Present the LF antenna to a reader.")
-        loadSlotsInner()
     }
 }
 
