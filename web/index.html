@@ -173,6 +173,22 @@
   </div>
 
   <div class="card">
+    <h2>Slots &amp; emulation</h2>
+    <div class="row">
+      <button class="act primary" data-fn="loadslots" disabled>Load slots</button>
+      <button class="act" data-fn="savecfg" disabled>Save to flash</button>
+      <button class="act" data-fn="modereader" disabled>Reader mode</button>
+      <button class="act good" data-fn="modeemulate" disabled>Emulate mode</button>
+    </div>
+    <div id="slotList" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:8px">
+      <button class="act good" data-fn="emuhf" disabled>Emulate scanned HF UID</button>
+      <button class="act good" data-fn="emulf" disabled>Emulate read EM410x</button>
+    </div>
+    <p class="hint">Load slots to see the 8 emulation slots; toggle HF/LF per slot and pick the active one. <b>Emulate scanned/read</b> loads the last HF UID or EM410x ID into the active slot and switches the Chameleon to <b>tag mode</b> so it acts as that card. Save to flash to keep it across reboots.</p>
+  </div>
+
+  <div class="card">
     <h2>Raw command</h2>
     <div class="row">
       <input id="rawCmd" type="text" placeholder="cmd (e.g. 1000)">
@@ -204,8 +220,18 @@ const CMD = {
   MF1_DETECT_PRNG:2002, MF1_STATIC_NESTED_ACQUIRE:2003, MF1_DARKSIDE_ACQUIRE:2004,
   MF1_DETECT_NT_DIST:2005, MF1_NESTED_ACQUIRE:2006, MF1_AUTH_ONE_KEY_BLOCK:2007,
   MF1_READ_ONE_BLOCK:2008, MF1_WRITE_ONE_BLOCK:2009, HF14A_RAW:2010, MF1_CHECK_KEYS_ON_BLOCK:2015,
+  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_ENABLE:1006, SLOT_DATA_CONFIG_SAVE:1009,
+  GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, GET_ENABLED_SLOTS:1023,
   EM410X_SCAN:3000, EM410X_WRITE_TO_T55XX:3001,
+  HF14A_SET_ANTI_COLL_DATA:4001, EM410X_SET_EMU_ID:5000,
 };
+// Sense types and a few emulation tag types.
+const SENSE_LF = 1, SENSE_HF = 2;
+const TAG_NAMES = {0:"—",100:"EM410x",101:"EM410x/16",102:"EM410x/32",103:"EM410x/64",104:"EM410x Electra",
+  1000:"MIFARE Mini",1001:"MIFARE 1K",1003:"MIFARE 4K",1100:"NTAG213",1101:"NTAG215",1102:"NTAG216"};
+function tagName(v){ return TAG_NAMES[v] ?? (v ? "type "+v : "—"); }
+let lastHF = null;       // last scanned HF tag {uid,atqa,sak,ats}
+let activeSlot = 0;      // current active slot (0-based)
 const STATUS_LABEL = {0x00:"HF tag OK",0x01:"no HF tag",0x06:"MIFARE auth failed",
   0x40:"LF tag OK",0x41:"no LF tag",0x60:"parity error",0x66:"wrong device mode",
   0x67:"invalid command",0x68:"success",0x69:"not implemented"};
@@ -377,6 +403,7 @@ async function hfScan(){
   const uidlen=d[o++]; const uid=d.slice(o,o+uidlen); o+=uidlen;
   const atqa=d.slice(o,o+2); o+=2; const sak=d[o++]; const atslen=d[o++];
   const ats=atslen>0?d.slice(o,o+atslen):new Uint8Array();
+  lastHF = {uid:Array.from(uid), atqa:Array.from(atqa), sak, ats:Array.from(ats)};
   const k=classifyHF(sak,atqa);
   renderKV("hfResult",{UID:hexS(uid),"SAK / ATQA":`${hex([sak])} / ${hexS(atqa)}`,ATS:ats.length?hexS(ats):"—"},
     {label:k.name, clonable:k.clonable, note:k.note});
@@ -651,6 +678,83 @@ async function recoverDarkside(){
   logLine("err","Darkside: no key recovered after max retries.");
 }
 
+// ---- Slots & emulation ----
+async function loadSlots(){
+  const act = await send(CMD.GET_ACTIVE_SLOT);
+  const en = await send(CMD.GET_ENABLED_SLOTS);
+  const info = await send(CMD.GET_SLOT_INFO);
+  if(en.status!==0x68 || info.status!==0x68){ logLine("err","Failed to read slots."); return; }
+  activeSlot = act.data[0] ?? 0;
+  const slots = [];
+  for(let i=0;i<8;i++){
+    slots.push({
+      i,
+      hfEn: (en.data[i*2] ?? 0) !== 0,
+      lfEn: (en.data[i*2+1] ?? 0) !== 0,
+      hfType: ((info.data[i*4] << 8) | info.data[i*4+1]),
+      lfType: ((info.data[i*4+2] << 8) | info.data[i*4+3]),
+    });
+  }
+  renderSlots(slots);
+}
+function guard(fn){ Promise.resolve().then(fn).catch(e => logLine("err", e.message || String(e))); }
+function renderSlots(slots){
+  const el = document.getElementById("slotList"); el.innerHTML = "";
+  for(const s of slots){
+    const row = document.createElement("div"); row.className = "kv"; row.style.alignItems = "center";
+    row.innerHTML = `<span class="k">${s.i === activeSlot ? "● " : ""}Slot ${s.i+1}</span>`;
+    const right = document.createElement("span");
+    right.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end";
+    right.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span><span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`;
+    const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "padding:4px 8px;font-size:.72rem"; b.onclick = () => guard(fn); return b; };
+    right.appendChild(mk(s.hfEn ? "HF off" : "HF on", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
+    right.appendChild(mk(s.lfEn ? "LF off" : "LF on", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
+    if(s.i !== activeSlot) right.appendChild(mk("Active", () => setActiveSlot(s.i)));
+    row.appendChild(right); el.appendChild(row);
+  }
+}
+async function setActiveSlot(n){
+  const r = await send(CMD.SET_ACTIVE_SLOT, [n]);
+  if(r.status === 0x68){ logLine("sys", `Active slot → ${n+1}`); await loadSlots(); }
+  else logLine("err", "Set active failed: " + (STATUS_LABEL[r.status] || r.status));
+}
+async function setSlotEnable(slot, sense, enabled){
+  const r = await send(CMD.SET_SLOT_ENABLE, [slot, sense, enabled ? 1 : 0]);
+  if(r.status === 0x68){ logLine("sys", `Slot ${slot+1} ${sense===SENSE_HF?'HF':'LF'} ${enabled?'enabled':'disabled'}`); await loadSlots(); }
+  else logLine("err", "Enable/disable failed: " + (STATUS_LABEL[r.status] || r.status));
+}
+async function saveSlots(){
+  const r = await send(CMD.SLOT_DATA_CONFIG_SAVE, [], 5000);
+  logLine(r.status===0x68 ? "sys" : "err", r.status===0x68 ? "Slot config saved to flash." : "Save failed.");
+}
+async function setMode(reader){
+  await send(CMD.CHANGE_DEVICE_MODE, [reader ? 1 : 0]);
+  logLine("sys", reader ? "Reader mode." : "Emulate (tag) mode — Chameleon now acts as the active slot's card.");
+}
+async function emulateHF(){
+  if(!lastHF){ logLine("err", "Scan an HF tag first (HF section)."); return; }
+  const slot = activeSlot;
+  await send(CMD.SET_SLOT_TAG_TYPE, [slot, (1001 >> 8) & 0xFF, 1001 & 0xFF]); // MIFARE 1K emulator
+  const p = [lastHF.uid.length, ...lastHF.uid, ...lastHF.atqa, lastHF.sak, lastHF.ats.length, ...lastHF.ats];
+  const r = await send(CMD.HF14A_SET_ANTI_COLL_DATA, p);
+  if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
+  await send(CMD.SLOT_DATA_CONFIG_SAVE);
+  await send(CMD.CHANGE_DEVICE_MODE, [0]);
+  logLine("sys", `Emulating UID ${hexS(lastHF.uid)} on slot ${slot+1} (tag mode). Present it to a reader.`);
+  await loadSlots();
+}
+async function emulateLF(){
+  if(!lastLfId){ logLine("err", "Read an EM410x tag first (LF section)."); return; }
+  const slot = activeSlot;
+  await send(CMD.SET_SLOT_TAG_TYPE, [slot, (100 >> 8) & 0xFF, 100 & 0xFF]); // EM410X
+  const r = await send(CMD.EM410X_SET_EMU_ID, Array.from(lastLfId));
+  if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
+  await send(CMD.SLOT_DATA_CONFIG_SAVE);
+  await send(CMD.CHANGE_DEVICE_MODE, [0]);
+  logLine("sys", `Emulating EM410x ${hexS(lastLfId)} on slot ${slot+1} (tag mode).`);
+  await loadSlots();
+}
+
 // ---- UI ----
 function renderKV(id, kv, badge){
   const el=document.getElementById(id); el.innerHTML="";
@@ -716,6 +820,12 @@ async function runFn(fn){
     else if(fn==="mfwriteuid") await mfWriteUid();
     else if(fn==="recovernested") await recoverNested();
     else if(fn==="recoverdarkside") await recoverDarkside();
+    else if(fn==="loadslots") await loadSlots();
+    else if(fn==="savecfg") await saveSlots();
+    else if(fn==="modereader") await setMode(true);
+    else if(fn==="modeemulate") await setMode(false);
+    else if(fn==="emuhf") await emulateHF();
+    else if(fn==="emulf") await emulateLF();
     else if(fn==="raw") await rawSend();
   }catch(e){ logLine("err", (fn+" error: ")+e.message); }
 }

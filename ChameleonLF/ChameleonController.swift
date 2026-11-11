@@ -72,6 +72,14 @@ enum TagKind {
     }
 }
 
+struct SlotRow: Identifiable {
+    let id: Int          // 0-based slot index
+    let hfEnabled: Bool
+    let lfEnabled: Bool
+    let hfType: Int
+    let lfType: Int
+}
+
 @MainActor
 final class ChameleonController: ObservableObject {
 
@@ -82,6 +90,8 @@ final class ChameleonController: ObservableObject {
     @Published var lastHFTag: HF14ATag? = nil
     @Published var deviceInfo: String = ""
     @Published var lastFoundKey: [UInt8]? = nil        // last recovered / found MIFARE key
+    @Published var slots: [SlotRow] = []
+    @Published var activeSlot: Int = 0
 
     let ble = ChameleonBLE()
     private var cancellables = Set<AnyCancellable>()
@@ -558,6 +568,105 @@ final class ChameleonController: ObservableObject {
                 self.line("Candidates didn't verify, retrying (\(retry + 1))…")
             }
             self.line("Darkside: no key recovered after max retries.")
+        }
+    }
+
+    // MARK: - Slots & emulation
+
+    static let senseLF: UInt8 = 1
+    static let senseHF: UInt8 = 2
+
+    static func tagName(_ v: Int) -> String {
+        switch v {
+        case 0:    return "—"
+        case 100:  return "EM410x"
+        case 1000: return "MIFARE Mini"
+        case 1001: return "MIFARE 1K"
+        case 1003: return "MIFARE 4K"
+        case 1100: return "NTAG213"
+        case 1101: return "NTAG215"
+        case 1102: return "NTAG216"
+        default:   return v != 0 ? "type \(v)" : "—"
+        }
+    }
+
+    private func loadSlotsInner() async throws {
+        let act = try await ble.send(.getActiveSlot)
+        let en = try await ble.send(.getEnabledSlots)
+        let info = try await ble.send(.getSlotInfo)
+        guard en.genericOk, info.genericOk else { line("Failed to read slots."); return }
+        activeSlot = Int(act.data.first ?? 0)
+        var rows: [SlotRow] = []
+        for i in 0..<8 {
+            let hfEn = en.data.count > i*2   && en.data[i*2]   != 0
+            let lfEn = en.data.count > i*2+1 && en.data[i*2+1] != 0
+            let hfType = info.data.count > i*4+1 ? (Int(info.data[i*4]) << 8 | Int(info.data[i*4+1])) : 0
+            let lfType = info.data.count > i*4+3 ? (Int(info.data[i*4+2]) << 8 | Int(info.data[i*4+3])) : 0
+            rows.append(SlotRow(id: i, hfEnabled: hfEn, lfEnabled: lfEn, hfType: hfType, lfType: lfType))
+        }
+        slots = rows
+    }
+
+    func loadSlots() { run("Slots") { try await self.loadSlotsInner() } }
+
+    func setActiveSlotButton(_ n: Int) {
+        run("Active slot") {
+            let r = try await self.ble.send(.setActiveSlot, data: [UInt8(n)])
+            if r.genericOk { self.line("Active slot → \(n + 1)"); try await self.loadSlotsInner() }
+            else { self.line("Set active failed (\(r.statusEnum.label)).") }
+        }
+    }
+
+    func setSlotEnableButton(slot: Int, sense: UInt8, enabled: Bool) {
+        run("Slot enable") {
+            let r = try await self.ble.send(.setSlotEnable, data: [UInt8(slot), sense, enabled ? 1 : 0])
+            if r.genericOk {
+                self.line("Slot \(slot + 1) \(sense == Self.senseHF ? "HF" : "LF") \(enabled ? "enabled" : "disabled")")
+                try await self.loadSlotsInner()
+            } else { self.line("Enable/disable failed (\(r.statusEnum.label)).") }
+        }
+    }
+
+    func saveConfig() {
+        run("Save") {
+            let r = try await self.ble.send(.slotDataConfigSave, timeout: 5)
+            self.line(r.genericOk ? "Slot config saved to flash." : "Save failed (\(r.statusEnum.label)).")
+        }
+    }
+
+    func setMode(reader: Bool) {
+        run("Mode") {
+            _ = try await self.ble.send(.changeDeviceMode, data: [reader ? 1 : 0])
+            self.line(reader ? "Reader mode." : "Emulate (tag) mode — Chameleon now acts as the active slot's card.")
+        }
+    }
+
+    func emulateHF() {
+        run("Emulate HF") {
+            guard let t = self.lastHFTag else { self.line("Scan an HF tag first."); return }
+            let slot = UInt8(self.activeSlot)
+            _ = try await self.ble.send(.setSlotTagType, data: [slot, UInt8((1001 >> 8) & 0xFF), UInt8(1001 & 0xFF)])
+            var p: [UInt8] = [UInt8(t.uid.count)]; p += t.uid; p += t.atqa; p.append(t.sak); p.append(UInt8(t.ats.count)); p += t.ats
+            let r = try await self.ble.send(.hf14aSetAntiColl, data: p)
+            guard r.genericOk else { self.line("Set anti-coll failed (\(r.statusEnum.label))."); return }
+            _ = try await self.ble.send(.slotDataConfigSave)
+            _ = try await self.ble.send(.changeDeviceMode, data: [0])
+            self.line("Emulating UID \(ChameleonFrame.hexSpaced(t.uid)) on slot \(self.activeSlot + 1) (tag mode). Present it to a reader.")
+            try await self.loadSlotsInner()
+        }
+    }
+
+    func emulateLF() {
+        run("Emulate LF") {
+            guard let id = self.lastReadId else { self.line("Read an EM410x tag first."); return }
+            let slot = UInt8(self.activeSlot)
+            _ = try await self.ble.send(.setSlotTagType, data: [slot, UInt8((100 >> 8) & 0xFF), UInt8(100 & 0xFF)])
+            let r = try await self.ble.send(.em410xSetEmuId, data: id)
+            guard r.genericOk else { self.line("Set EM410x emu id failed (\(r.statusEnum.label))."); return }
+            _ = try await self.ble.send(.slotDataConfigSave)
+            _ = try await self.ble.send(.changeDeviceMode, data: [0])
+            self.line("Emulating EM410x \(ChameleonFrame.hexSpaced(id)) on slot \(self.activeSlot + 1) (tag mode).")
+            try await self.loadSlotsInner()
         }
     }
 }

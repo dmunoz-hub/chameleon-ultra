@@ -25,6 +25,8 @@ data class HFTag(val uid: ByteArray, val atqa: ByteArray, val sak: Int, val ats:
     }
 }
 
+data class SlotRow(val index: Int, val hfEnabled: Boolean, val lfEnabled: Boolean, val hfType: Int, val lfType: Int)
+
 class ChameleonController(app: Application) : AndroidViewModel(app) {
 
     val ble = ChameleonBle(app)
@@ -43,6 +45,10 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
     val lastHF: StateFlow<HFTag?> = _lastHF.asStateFlow()
     private val _foundKey = MutableStateFlow<String?>(null)  // last recovered key (hex)
     val foundKey: StateFlow<String?> = _foundKey.asStateFlow()
+    private val _slots = MutableStateFlow<List<SlotRow>>(emptyList())
+    val slots: StateFlow<List<SlotRow>> = _slots.asStateFlow()
+    private val _activeSlot = MutableStateFlow(0)
+    val activeSlot: StateFlow<Int> = _activeSlot.asStateFlow()
 
     private var lastIdBytes: ByteArray? = null
 
@@ -333,4 +339,80 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         }
         log("Darkside: no key recovered after max retries.")
     }
+
+    // Slots & emulation
+    private suspend fun loadSlotsInner() {
+        val act = ble.send(Cmd.GET_ACTIVE_SLOT)
+        val en = ble.send(Cmd.GET_ENABLED_SLOTS)
+        val info = ble.send(Cmd.GET_SLOT_INFO)
+        if (!en.genericOk || !info.genericOk) { log("Failed to read slots."); return }
+        _activeSlot.value = if (act.data.isNotEmpty()) act.data[0].toInt() and 0xFF else 0
+        val rows = ArrayList<SlotRow>()
+        for (i in 0 until 8) {
+            val hfEn = en.data.size > i * 2 && en.data[i * 2].toInt() != 0
+            val lfEn = en.data.size > i * 2 + 1 && en.data[i * 2 + 1].toInt() != 0
+            val hfType = if (info.data.size > i * 4 + 1) ((info.data[i * 4].toInt() and 0xFF) shl 8) or (info.data[i * 4 + 1].toInt() and 0xFF) else 0
+            val lfType = if (info.data.size > i * 4 + 3) ((info.data[i * 4 + 2].toInt() and 0xFF) shl 8) or (info.data[i * 4 + 3].toInt() and 0xFF) else 0
+            rows.add(SlotRow(i, hfEn, lfEn, hfType, lfType))
+        }
+        _slots.value = rows
+    }
+    fun loadSlots() = run("Slots") { loadSlotsInner() }
+
+    fun setActiveSlot(n: Int) = run("Active slot") {
+        val r = ble.send(Cmd.SET_ACTIVE_SLOT, byteArrayOf(n.toByte()))
+        if (r.genericOk) { log("Active slot → ${n + 1}"); loadSlotsInner() } else log("Set active failed (${Status.label(r.status)}).")
+    }
+
+    fun setSlotEnable(slot: Int, sense: Int, enabled: Boolean) = run("Slot enable") {
+        val r = ble.send(Cmd.SET_SLOT_ENABLE, byteArrayOf(slot.toByte(), sense.toByte(), (if (enabled) 1 else 0).toByte()))
+        if (r.genericOk) { log("Slot ${slot + 1} ${if (sense == SENSE_HF) "HF" else "LF"} ${if (enabled) "enabled" else "disabled"}"); loadSlotsInner() }
+        else log("Enable/disable failed (${Status.label(r.status)}).")
+    }
+
+    fun saveConfig() = run("Save") {
+        val r = ble.send(Cmd.SLOT_DATA_CONFIG_SAVE, timeoutMs = 5000L)
+        log(if (r.genericOk) "Slot config saved to flash." else "Save failed (${Status.label(r.status)}).")
+    }
+
+    fun setMode(reader: Boolean) = run("Mode") {
+        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf((if (reader) 1 else 0).toByte()))
+        log(if (reader) "Reader mode." else "Emulate (tag) mode — Chameleon now acts as the active slot's card.")
+    }
+
+    fun emulateHF() = run("Emulate HF") {
+        val t = _lastHF.value
+        if (t == null) { log("Scan an HF tag first."); return@run }
+        val slot = _activeSlot.value
+        ble.send(Cmd.SET_SLOT_TAG_TYPE, byteArrayOf(slot.toByte(), ((1001 shr 8) and 0xFF).toByte(), (1001 and 0xFF).toByte()))
+        val p = ArrayList<Byte>()
+        p.add(t.uid.size.toByte()); p.addAll(t.uid.toList()); p.addAll(t.atqa.toList()); p.add(t.sak.toByte()); p.add(t.ats.size.toByte()); p.addAll(t.ats.toList())
+        val r = ble.send(Cmd.HF14A_SET_ANTI_COLL_DATA, p.toByteArray())
+        if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return@run }
+        ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
+        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
+        log("Emulating UID ${t.uid.hexSpaced()} on slot ${slot + 1} (tag mode). Present it to a reader.")
+        loadSlotsInner()
+    }
+
+    fun emulateLF() = run("Emulate LF") {
+        val id = lastIdBytes
+        if (id == null) { log("Read an EM410x tag first."); return@run }
+        val slot = _activeSlot.value
+        ble.send(Cmd.SET_SLOT_TAG_TYPE, byteArrayOf(slot.toByte(), ((100 shr 8) and 0xFF).toByte(), (100 and 0xFF).toByte()))
+        val r = ble.send(Cmd.EM410X_SET_EMU_ID, id)
+        if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return@run }
+        ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
+        ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
+        log("Emulating EM410x ${id.hexSpaced()} on slot ${slot + 1} (tag mode).")
+        loadSlotsInner()
+    }
+}
+
+const val SENSE_LF = 1
+const val SENSE_HF = 2
+fun slotTagName(v: Int): String = when (v) {
+    0 -> "—"; 100 -> "EM410x"; 1000 -> "MIFARE Mini"; 1001 -> "MIFARE 1K"; 1003 -> "MIFARE 4K"
+    1100 -> "NTAG213"; 1101 -> "NTAG215"; 1102 -> "NTAG216"
+    else -> if (v != 0) "type $v" else "—"
 }

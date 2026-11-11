@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +63,8 @@ private fun ChameleonScreen(vm: ChameleonController) {
     val lastId by vm.lastId.collectAsState()
     val hf by vm.lastHF.collectAsState()
     val foundKey by vm.foundKey.collectAsState()
+    val slots by vm.slots.collectAsState()
+    val active by vm.activeSlot.collectAsState()
     val logLines by vm.log.collectAsState()
 
     val canAct = connected && !busy
@@ -201,6 +204,36 @@ private fun ChameleonScreen(vm: ChameleonController) {
                     }
                 }
                 Hint("Runs the firmware's own solver natively on-device. Acquisition is probabilistic — re-run if it misses. Hardnested tags aren't supported.")
+            }
+
+            // Slots & emulation
+            SectionCard("Slots & emulation") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallBtn("Load", canAct, Modifier.weight(1f)) { vm.loadSlots() }
+                    SmallBtn("Save", canAct, Modifier.weight(1f)) { vm.saveConfig() }
+                    SmallBtn("Reader", canAct, Modifier.weight(1f)) { vm.setMode(true) }
+                    SmallBtn("Emulate", canAct, Modifier.weight(1f), prominent = true) { vm.setMode(false) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallBtn("Emul. HF UID", canAct && hf != null, Modifier.weight(1f), prominent = true) { vm.emulateHF() }
+                    SmallBtn("Emul. LF ID", canAct && lastId != null, Modifier.weight(1f), prominent = true) { vm.emulateLF() }
+                }
+                slots.forEach { s ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("${if (s.index == active) "● " else ""}S${s.index + 1}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(40.dp))
+                        Text("HF ${slotTagName(s.hfType)}", fontSize = 10.sp, maxLines = 1,
+                            color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text("LF ${slotTagName(s.lfType)}", fontSize = 10.sp, maxLines = 1,
+                            color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_HF, !s.hfEnabled) }, enabled = canAct,
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text(if (s.hfEnabled) "HF✕" else "HF✓", fontSize = 10.sp) }
+                        TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_LF, !s.lfEnabled) }, enabled = canAct,
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text(if (s.lfEnabled) "LF✕" else "LF✓", fontSize = 10.sp) }
+                        if (s.index != active) TextButton(onClick = { vm.setActiveSlot(s.index) }, enabled = canAct,
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
+                    }
+                }
+                Hint("Load the 8 slots, toggle HF/LF, pick the active one. Emulate loads the last HF UID or EM410x ID into the active slot and switches to tag mode. Save to keep across reboots.")
             }
 
             // Log

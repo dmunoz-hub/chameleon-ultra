@@ -37,6 +37,7 @@ struct ContentView: View {
                     mifareCard
                     magicUidCard
                     recoveryCard
+                    slotsCard
                     logCard
                 }
                 .padding()
@@ -228,6 +229,42 @@ struct ContentView: View {
             Note("Runs the firmware's own solver natively on-device. Acquisition is probabilistic — re-run if it misses. Hardnested tags aren't supported.")
         }
         .textFieldStyle(.roundedBorder)
+    }
+
+    // MARK: Slots & emulation
+
+    private var slotsCard: some View {
+        Card(title: "Slots & emulation") {
+            HStack {
+                SmallButton("Load", disabled: !canAct) { c.loadSlots() }
+                SmallButton("Save", disabled: !canAct) { c.saveConfig() }
+                SmallButton("Reader", disabled: !canAct) { c.setMode(reader: true) }
+                SmallButton("Emulate", disabled: !canAct, prominent: true) { c.setMode(reader: false) }
+            }
+            HStack {
+                SmallButton("Emul. HF UID", disabled: !canAct || c.lastHFTag == nil, prominent: true) { c.emulateHF() }
+                SmallButton("Emul. LF ID", disabled: !canAct || c.lastReadId == nil, prominent: true) { c.emulateLF() }
+            }
+            ForEach(c.slots) { s in
+                HStack(spacing: 6) {
+                    Text("\(s.id == c.activeSlot ? "● " : "")Slot \(s.id + 1)")
+                        .font(.caption).frame(width: 64, alignment: .leading)
+                    Text("HF \(ChameleonController.tagName(s.hfType))")
+                        .font(.caption2).foregroundStyle(s.hfEnabled ? Color.green : Color.secondary).lineLimit(1)
+                    Text("LF \(ChameleonController.tagName(s.lfType))")
+                        .font(.caption2).foregroundStyle(s.lfEnabled ? Color.green : Color.secondary).lineLimit(1)
+                    Spacer(minLength: 2)
+                    Button(s.hfEnabled ? "HF✕" : "HF✓") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) }
+                        .buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                    Button(s.lfEnabled ? "LF✕" : "LF✓") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) }
+                        .buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                    if s.id != c.activeSlot {
+                        Button("Use") { c.setActiveSlotButton(s.id) }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                    }
+                }
+            }
+            Note("Load the 8 slots, toggle HF/LF, pick the active one. Emulate loads the last HF UID or EM410x ID into the active slot and switches to tag mode. Save to keep across reboots.")
+        }
     }
 
     // MARK: Log
