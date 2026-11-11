@@ -9,6 +9,7 @@ object Cmd {
     const val CHANGE_DEVICE_MODE = 1001
     const val SET_ACTIVE_SLOT = 1003
     const val SET_SLOT_TAG_TYPE = 1004
+    const val SET_SLOT_DATA_DEFAULT = 1005
     const val SET_SLOT_ENABLE = 1006
     const val SLOT_DATA_CONFIG_SAVE = 1009
     const val GET_DEVICE_CHIP_ID = 1011

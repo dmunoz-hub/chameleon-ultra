@@ -19,6 +19,7 @@ enum Command: UInt16 {
     case getDeviceMode          = 1002
     case setActiveSlot          = 1003
     case setSlotTagType         = 1004
+    case setSlotDataDefault     = 1005
     case setSlotEnable          = 1006
     case slotDataConfigSave     = 1009
     case getDeviceChipId        = 1011

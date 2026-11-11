@@ -220,7 +220,7 @@ const CMD = {
   MF1_DETECT_PRNG:2002, MF1_STATIC_NESTED_ACQUIRE:2003, MF1_DARKSIDE_ACQUIRE:2004,
   MF1_DETECT_NT_DIST:2005, MF1_NESTED_ACQUIRE:2006, MF1_AUTH_ONE_KEY_BLOCK:2007,
   MF1_READ_ONE_BLOCK:2008, MF1_WRITE_ONE_BLOCK:2009, HF14A_RAW:2010, MF1_CHECK_KEYS_ON_BLOCK:2015,
-  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_ENABLE:1006, SLOT_DATA_CONFIG_SAVE:1009,
+  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_DATA_DEFAULT:1005, SET_SLOT_ENABLE:1006, SLOT_DATA_CONFIG_SAVE:1009,
   GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, GET_ENABLED_SLOTS:1023,
   EM410X_SCAN:3000, EM410X_WRITE_TO_T55XX:3001,
   HF14A_SET_ANTI_COLL_DATA:4001, EM410X_SET_EMU_ID:5000,
@@ -733,25 +733,33 @@ async function setMode(reader){
 }
 async function emulateHF(){
   if(!lastHF){ logLine("err", "Scan an HF tag first (HF section)."); return; }
-  const slot = activeSlot;
-  await send(CMD.SET_SLOT_TAG_TYPE, [slot, (1001 >> 8) & 0xFF, 1001 & 0xFF]); // MIFARE 1K emulator
+  const slot = activeSlot, tt = 1001; // MIFARE 1K emulator
+  const ttHi = (tt >> 8) & 0xFF, ttLo = tt & 0xFF;
+  await send(CMD.SET_ACTIVE_SLOT, [slot]);
+  await send(CMD.SET_SLOT_TAG_TYPE, [slot, ttHi, ttLo]);
+  await send(CMD.SET_SLOT_DATA_DEFAULT, [slot, ttHi, ttLo]);
+  await send(CMD.SET_SLOT_ENABLE, [slot, SENSE_HF, 1]);
   const p = [lastHF.uid.length, ...lastHF.uid, ...lastHF.atqa, lastHF.sak, lastHF.ats.length, ...lastHF.ats];
   const r = await send(CMD.HF14A_SET_ANTI_COLL_DATA, p);
   if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   await send(CMD.CHANGE_DEVICE_MODE, [0]);
-  logLine("sys", `Emulating UID ${hexS(lastHF.uid)} on slot ${slot+1} (tag mode). Present it to a reader.`);
+  logLine("sys", `Emulating UID ${hexS(lastHF.uid)} on slot ${slot+1} (tag mode). Present the HF antenna to a reader.`);
   await loadSlots();
 }
 async function emulateLF(){
   if(!lastLfId){ logLine("err", "Read an EM410x tag first (LF section)."); return; }
-  const slot = activeSlot;
-  await send(CMD.SET_SLOT_TAG_TYPE, [slot, (100 >> 8) & 0xFF, 100 & 0xFF]); // EM410X
+  const slot = activeSlot, tt = 100; // EM410X
+  const ttHi = (tt >> 8) & 0xFF, ttLo = tt & 0xFF;
+  await send(CMD.SET_ACTIVE_SLOT, [slot]);
+  await send(CMD.SET_SLOT_TAG_TYPE, [slot, ttHi, ttLo]);
+  await send(CMD.SET_SLOT_DATA_DEFAULT, [slot, ttHi, ttLo]);
+  await send(CMD.SET_SLOT_ENABLE, [slot, SENSE_LF, 1]);
   const r = await send(CMD.EM410X_SET_EMU_ID, Array.from(lastLfId));
   if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   await send(CMD.CHANGE_DEVICE_MODE, [0]);
-  logLine("sys", `Emulating EM410x ${hexS(lastLfId)} on slot ${slot+1} (tag mode).`);
+  logLine("sys", `Emulating EM410x ${hexS(lastLfId)} on slot ${slot+1} (tag mode). Present the LF antenna to a reader.`);
   await loadSlots();
 }
 

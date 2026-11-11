@@ -380,18 +380,26 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         log(if (reader) "Reader mode." else "Emulate (tag) mode — Chameleon now acts as the active slot's card.")
     }
 
+    private suspend fun setupSlotForEmulation(slot: Int, tagType: Int, sense: Int) {
+        val hi = ((tagType shr 8) and 0xFF).toByte(); val lo = (tagType and 0xFF).toByte()
+        ble.send(Cmd.SET_ACTIVE_SLOT, byteArrayOf(slot.toByte()))
+        ble.send(Cmd.SET_SLOT_TAG_TYPE, byteArrayOf(slot.toByte(), hi, lo))
+        ble.send(Cmd.SET_SLOT_DATA_DEFAULT, byteArrayOf(slot.toByte(), hi, lo))
+        ble.send(Cmd.SET_SLOT_ENABLE, byteArrayOf(slot.toByte(), sense.toByte(), 1))
+    }
+
     fun emulateHF() = run("Emulate HF") {
         val t = _lastHF.value
         if (t == null) { log("Scan an HF tag first."); return@run }
         val slot = _activeSlot.value
-        ble.send(Cmd.SET_SLOT_TAG_TYPE, byteArrayOf(slot.toByte(), ((1001 shr 8) and 0xFF).toByte(), (1001 and 0xFF).toByte()))
+        setupSlotForEmulation(slot, 1001, SENSE_HF) // MIFARE 1K
         val p = ArrayList<Byte>()
         p.add(t.uid.size.toByte()); p.addAll(t.uid.toList()); p.addAll(t.atqa.toList()); p.add(t.sak.toByte()); p.add(t.ats.size.toByte()); p.addAll(t.ats.toList())
         val r = ble.send(Cmd.HF14A_SET_ANTI_COLL_DATA, p.toByteArray())
         if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return@run }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
-        log("Emulating UID ${t.uid.hexSpaced()} on slot ${slot + 1} (tag mode). Present it to a reader.")
+        log("Emulating UID ${t.uid.hexSpaced()} on slot ${slot + 1} (tag mode). Present the HF antenna to a reader.")
         loadSlotsInner()
     }
 
@@ -399,12 +407,12 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         val id = lastIdBytes
         if (id == null) { log("Read an EM410x tag first."); return@run }
         val slot = _activeSlot.value
-        ble.send(Cmd.SET_SLOT_TAG_TYPE, byteArrayOf(slot.toByte(), ((100 shr 8) and 0xFF).toByte(), (100 and 0xFF).toByte()))
+        setupSlotForEmulation(slot, 100, SENSE_LF) // EM410X
         val r = ble.send(Cmd.EM410X_SET_EMU_ID, id)
         if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return@run }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
-        log("Emulating EM410x ${id.hexSpaced()} on slot ${slot + 1} (tag mode).")
+        log("Emulating EM410x ${id.hexSpaced()} on slot ${slot + 1} (tag mode). Present the LF antenna to a reader.")
         loadSlotsInner()
     }
 }

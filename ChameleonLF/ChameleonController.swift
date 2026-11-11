@@ -641,17 +641,26 @@ final class ChameleonController: ObservableObject {
         }
     }
 
+    /// Full emulation setup for a slot/sense/type (matches the CLI's sequence).
+    private func setupSlotForEmulation(slot: UInt8, tagType: Int, sense: UInt8) async throws {
+        let hi = UInt8((tagType >> 8) & 0xFF), lo = UInt8(tagType & 0xFF)
+        _ = try await ble.send(.setActiveSlot, data: [slot])
+        _ = try await ble.send(.setSlotTagType, data: [slot, hi, lo])
+        _ = try await ble.send(.setSlotDataDefault, data: [slot, hi, lo])
+        _ = try await ble.send(.setSlotEnable, data: [slot, sense, 1])
+    }
+
     func emulateHF() {
         run("Emulate HF") {
             guard let t = self.lastHFTag else { self.line("Scan an HF tag first."); return }
             let slot = UInt8(self.activeSlot)
-            _ = try await self.ble.send(.setSlotTagType, data: [slot, UInt8((1001 >> 8) & 0xFF), UInt8(1001 & 0xFF)])
+            try await self.setupSlotForEmulation(slot: slot, tagType: 1001, sense: Self.senseHF) // MIFARE 1K
             var p: [UInt8] = [UInt8(t.uid.count)]; p += t.uid; p += t.atqa; p.append(t.sak); p.append(UInt8(t.ats.count)); p += t.ats
             let r = try await self.ble.send(.hf14aSetAntiColl, data: p)
             guard r.genericOk else { self.line("Set anti-coll failed (\(r.statusEnum.label))."); return }
             _ = try await self.ble.send(.slotDataConfigSave)
             _ = try await self.ble.send(.changeDeviceMode, data: [0])
-            self.line("Emulating UID \(ChameleonFrame.hexSpaced(t.uid)) on slot \(self.activeSlot + 1) (tag mode). Present it to a reader.")
+            self.line("Emulating UID \(ChameleonFrame.hexSpaced(t.uid)) on slot \(self.activeSlot + 1) (tag mode). Present the HF antenna to a reader.")
             try await self.loadSlotsInner()
         }
     }
@@ -660,12 +669,12 @@ final class ChameleonController: ObservableObject {
         run("Emulate LF") {
             guard let id = self.lastReadId else { self.line("Read an EM410x tag first."); return }
             let slot = UInt8(self.activeSlot)
-            _ = try await self.ble.send(.setSlotTagType, data: [slot, UInt8((100 >> 8) & 0xFF), UInt8(100 & 0xFF)])
+            try await self.setupSlotForEmulation(slot: slot, tagType: 100, sense: Self.senseLF) // EM410X
             let r = try await self.ble.send(.em410xSetEmuId, data: id)
             guard r.genericOk else { self.line("Set EM410x emu id failed (\(r.statusEnum.label))."); return }
             _ = try await self.ble.send(.slotDataConfigSave)
             _ = try await self.ble.send(.changeDeviceMode, data: [0])
-            self.line("Emulating EM410x \(ChameleonFrame.hexSpaced(id)) on slot \(self.activeSlot + 1) (tag mode).")
+            self.line("Emulating EM410x \(ChameleonFrame.hexSpaced(id)) on slot \(self.activeSlot + 1) (tag mode). Present the LF antenna to a reader.")
             try await self.loadSlotsInner()
         }
     }
