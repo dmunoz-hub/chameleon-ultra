@@ -29,6 +29,12 @@ struct ContentView: View {
     private var canAct: Bool { c.isConnected && !c.busy }
     private func u8(_ s: String) -> UInt8 { UInt8(s.trimmingCharacters(in: .whitespaces)) ?? 0 }
     private func kt(_ b: Bool) -> MifareKeyType { b ? .keyB : .keyA }
+    private func rowTypes(_ s: SlotRow) -> String {
+        var parts: [String] = []
+        if s.hfType != 0 { parts.append("HF \(ChameleonController.tagName(s.hfType))") }
+        if s.lfType != 0 { parts.append("LF \(ChameleonController.tagName(s.lfType))") }
+        return parts.isEmpty ? "—" : parts.joined(separator: " · ")
+    }
 
     var body: some View {
         NavigationStack {
@@ -266,19 +272,22 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
-                        Text("HF \(ChameleonController.tagName(s.hfType))")
-                            .font(.caption2).foregroundStyle(s.hfEnabled ? Color.green : Color.secondary).lineLimit(1)
-                        Text("LF \(ChameleonController.tagName(s.lfType))")
-                            .font(.caption2).foregroundStyle(s.lfEnabled ? Color.green : Color.secondary).lineLimit(1)
-                        Spacer(minLength: 2)
-                        Button(s.hfEnabled ? "HF✓" : "HF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) }
+                        Group {
+                            if !s.name.isEmpty {
+                                Text(s.name).font(.caption.weight(.medium)).lineLimit(1).truncationMode(.tail)
+                            } else {
+                                Text(rowTypes(s)).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) } label: { Text(s.hfEnabled ? "HF✓" : "HF✕").lineLimit(1).fixedSize() }
                             .buttonStyle(.bordered).controlSize(.mini).tint(s.hfEnabled ? .green : .secondary).disabled(!canAct)
-                        Button(s.lfEnabled ? "LF✓" : "LF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) }
+                        Button { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) } label: { Text(s.lfEnabled ? "LF✓" : "LF✕").lineLimit(1).fixedSize() }
                             .buttonStyle(.bordered).controlSize(.mini).tint(s.lfEnabled ? .green : .secondary).disabled(!canAct)
                         if s.id != c.activeSlot {
-                            Button("Use") { c.setActiveSlotButton(s.id) }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                            Button { c.setActiveSlotButton(s.id) } label: { Text("Use").lineLimit(1).fixedSize() }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
                         }
-                        Button("Clr") { c.clearSlot(s.id) }.buttonStyle(.bordered).controlSize(.mini).tint(.red).disabled(!canAct)
+                        Button { c.clearSlot(s.id) } label: { Text("Clr").lineLimit(1).fixedSize() }.buttonStyle(.bordered).controlSize(.mini).tint(.red).disabled(!canAct)
                     }
                     if expandedSlots.contains(s.id) {
                         SlotDetailCard(slot: s, detail: c.slotDetails[s.id])

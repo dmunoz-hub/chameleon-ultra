@@ -243,6 +243,7 @@ let activeSlot = 0;      // current active slot (0-based)
 let slotsCache = [];     // last loaded slots
 let expandedSlots = new Set();
 let slotDetailCache = {};
+let slotNameCache = {};
 const STATUS_LABEL = {0x00:"HF tag OK",0x01:"no HF tag",0x06:"MIFARE auth failed",
   0x40:"LF tag OK",0x41:"no LF tag",0x60:"parity error",0x66:"wrong device mode",
   0x67:"invalid command",0x68:"success",0x69:"not implemented"};
@@ -692,12 +693,21 @@ async function recoverDarkside(){
 }
 
 // ---- Slots & emulation ----
-async function loadSlots(){
+async function loadSlots(fetchNicks){
   const act = await send(CMD.GET_ACTIVE_SLOT);
   const en = await send(CMD.GET_ENABLED_SLOTS);
   const info = await send(CMD.GET_SLOT_INFO);
   if(en.status!==0x68 || info.status!==0x68){ logLine("err","Failed to read slots."); return; }
   activeSlot = act.data[0] ?? 0;
+  if(fetchNicks){
+    const dec = (bytes) => { try { return new TextDecoder().decode(Uint8Array.from(bytes)).replace(/\0+$/, "").trim(); } catch(e){ return ""; } };
+    for(let i=0;i<8;i++){
+      const h = await send(CMD.GET_SLOT_TAG_NICK, [i, SENSE_HF]);
+      let name = h.status===0x68 ? dec(h.data) : "";
+      if(!name){ const l = await send(CMD.GET_SLOT_TAG_NICK, [i, SENSE_LF]); name = l.status===0x68 ? dec(l.data) : ""; }
+      slotNameCache[i] = name;
+    }
+  }
   const slots = [];
   for(let i=0;i<8;i++){
     slots.push({
@@ -706,6 +716,7 @@ async function loadSlots(){
       lfEn: (en.data[i*2+1] ?? 0) !== 0,
       hfType: ((info.data[i*4] << 8) | info.data[i*4+1]),
       lfType: ((info.data[i*4+2] << 8) | info.data[i*4+3]),
+      name: slotNameCache[i] || "",
     });
   }
   renderSlots(slots);
@@ -720,9 +731,11 @@ function renderSlots(slots){
     const row = document.createElement("div"); row.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap";
     const head = mk(`${expandedSlots.has(s.i) ? "▾" : "▸"} ${s.i === activeSlot ? "● " : ""}S${s.i+1}`, () => toggleSlot(s));
     row.appendChild(head);
-    const pills = document.createElement("span"); pills.style.cssText = "display:flex;gap:6px;flex:1;flex-wrap:wrap";
-    pills.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span><span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`;
-    row.appendChild(pills);
+    const mid = document.createElement("span");
+    mid.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem";
+    if(s.name){ mid.textContent = s.name; mid.style.fontWeight = "600"; }
+    else { mid.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span> <span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`; }
+    row.appendChild(mid);
     row.appendChild(mk(s.hfEn ? "HF ✓" : "HF ✕", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
     row.appendChild(mk(s.lfEn ? "LF ✓" : "LF ✕", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
     if(s.i !== activeSlot) row.appendChild(mk("Active", () => setActiveSlot(s.i)));
@@ -768,6 +781,7 @@ async function saveSlots(){
   if(name){ await setSlotNick(activeSlot, SENSE_HF, name); await setSlotNick(activeSlot, SENSE_LF, name); }
   const r = await send(CMD.SLOT_DATA_CONFIG_SAVE, [], 5000);
   if(name){
+    slotNameCache[activeSlot] = name;
     const d = slotDetailCache[activeSlot] || {}; d.name = name; d.nameHF = name; d.nameLF = name;
     slotDetailCache[activeSlot] = d;
     logLine(r.status===0x68 ? "sys" : "err", r.status===0x68 ? `Saved. Slot ${activeSlot+1} named "${name}".` : "Save failed.");
@@ -792,6 +806,7 @@ async function storeHF(){
   if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
   const name = slotNameInput();
   await setSlotNick(slot, SENSE_HF, name);
+  if(name) slotNameCache[slot] = name;
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   await loadSlots();
   logLine("sys", `Saved HF UID ${hexS(lastHF.uid)} to slot ${slot+1}${name ? ` ("${name}")` : ""}.`);
@@ -808,7 +823,9 @@ async function storeLF(){
   await send(CMD.SET_SLOT_ENABLE, [slot, SENSE_LF, 1]);
   const r = await send(CMD.EM410X_SET_EMU_ID, Array.from(lastLfId));
   if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
-  await setSlotNick(slot, SENSE_LF, slotNameInput());
+  const lfName = slotNameInput();
+  await setSlotNick(slot, SENSE_LF, lfName);
+  if(lfName) slotNameCache[slot] = lfName;
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   const g = await send(CMD.EM410X_GET_EMU_ID);
   if(g.status === 0x68 && g.data.length >= 5) logLine("sys", `Slot ${slot+1} stores EM410x ${hexS(emIdBytes(g.data))} (readback).`);
@@ -832,6 +849,7 @@ async function clearSlot(slot){
   await send(CMD.DELETE_SLOT_TAG_NICK, [slot, SENSE_LF]);
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   delete slotDetailCache[slot];
+  slotNameCache[slot] = "";
   logLine("sys", `Slot ${slot+1} cleared.`);
   await loadSlots();
 }
@@ -919,7 +937,7 @@ async function runFn(fn){
     else if(fn==="mfwriteuid") await mfWriteUid();
     else if(fn==="recovernested") await recoverNested();
     else if(fn==="recoverdarkside") await recoverDarkside();
-    else if(fn==="loadslots") await loadSlots();
+    else if(fn==="loadslots") await loadSlots(true);
     else if(fn==="savecfg") await saveSlots();
     else if(fn==="modereader") await setMode(true);
     else if(fn==="modeemulate") await setMode(false);

@@ -55,6 +55,13 @@ private fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
+private fun slotRowTypes(s: SlotRow): String {
+    val parts = ArrayList<String>()
+    if (s.hfType != 0) parts.add("HF ${slotTagName(s.hfType)}")
+    if (s.lfType != 0) parts.add("LF ${slotTagName(s.lfType)}")
+    return if (parts.isEmpty()) "—" else parts.joinToString(" · ")
+}
+
 private val blePerms: Array<String> =
     if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
     else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -242,10 +249,11 @@ private fun ChameleonScreen(vm: ChameleonController) {
                             }, enabled = canAct, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.width(62.dp)) {
                                 Text("${if (expandedSlots.contains(s.index)) "▾" else "▸"}${if (s.index == active) "●" else ""}S${s.index + 1}", style = MaterialTheme.typography.bodySmall)
                             }
-                            Text("HF ${slotTagName(s.hfType)}", fontSize = 10.sp, maxLines = 1,
-                                color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                            Text("LF ${slotTagName(s.lfType)}", fontSize = 10.sp, maxLines = 1,
-                                color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            Text(if (s.name.isNotEmpty()) s.name else slotRowTypes(s),
+                                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                fontWeight = if (s.name.isNotEmpty()) FontWeight.Medium else FontWeight.Normal,
+                                color = if (s.name.isNotEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f))
                             TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_HF, !s.hfEnabled) }, enabled = canAct,
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
                                 Text(if (s.hfEnabled) "HF✓" else "HF✕", fontSize = 10.sp, color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)

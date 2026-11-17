@@ -25,7 +25,7 @@ data class HFTag(val uid: ByteArray, val atqa: ByteArray, val sak: Int, val ats:
     }
 }
 
-data class SlotRow(val index: Int, val hfEnabled: Boolean, val lfEnabled: Boolean, val hfType: Int, val lfType: Int)
+data class SlotRow(val index: Int, val hfEnabled: Boolean, val lfEnabled: Boolean, val hfType: Int, val lfType: Int, val name: String = "")
 
 data class SlotDetail(
     val nameHF: String = "", val nameLF: String = "",
@@ -356,23 +356,34 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
     }
 
     // Slots & emulation
-    private suspend fun loadSlotsInner() {
+    private val slotNameCache = HashMap<Int, String>()
+    private suspend fun slotNick(slot: Int, sense: Int): String {
+        val r = ble.send(Cmd.GET_SLOT_TAG_NICK, byteArrayOf(slot.toByte(), sense.toByte()))
+        return if (r.genericOk) String(r.data, Charsets.UTF_8).trim('\u0000', ' ', '\n', '\r') else ""
+    }
+    private suspend fun loadSlotsInner(fetchNicks: Boolean = false) {
         val act = ble.send(Cmd.GET_ACTIVE_SLOT)
         val en = ble.send(Cmd.GET_ENABLED_SLOTS)
         val info = ble.send(Cmd.GET_SLOT_INFO)
         if (!en.genericOk || !info.genericOk) { log("Failed to read slots."); return }
         _activeSlot.value = if (act.data.isNotEmpty()) act.data[0].toInt() and 0xFF else 0
+        if (fetchNicks) {
+            for (i in 0 until 8) {
+                val h = slotNick(i, SENSE_HF)
+                slotNameCache[i] = if (h.isNotEmpty()) h else slotNick(i, SENSE_LF)
+            }
+        }
         val rows = ArrayList<SlotRow>()
         for (i in 0 until 8) {
             val hfEn = en.data.size > i * 2 && en.data[i * 2].toInt() != 0
             val lfEn = en.data.size > i * 2 + 1 && en.data[i * 2 + 1].toInt() != 0
             val hfType = if (info.data.size > i * 4 + 1) ((info.data[i * 4].toInt() and 0xFF) shl 8) or (info.data[i * 4 + 1].toInt() and 0xFF) else 0
             val lfType = if (info.data.size > i * 4 + 3) ((info.data[i * 4 + 2].toInt() and 0xFF) shl 8) or (info.data[i * 4 + 3].toInt() and 0xFF) else 0
-            rows.add(SlotRow(i, hfEn, lfEn, hfType, lfType))
+            rows.add(SlotRow(i, hfEn, lfEn, hfType, lfType, slotNameCache[i] ?: ""))
         }
         _slots.value = rows
     }
-    fun loadSlots() = run("Slots") { loadSlotsInner() }
+    fun loadSlots() = run("Slots") { loadSlotsInner(fetchNicks = true) }
 
     fun setActiveSlot(n: Int) = run("Active slot") {
         val r = ble.send(Cmd.SET_ACTIVE_SLOT, byteArrayOf(n.toByte()))
@@ -394,6 +405,7 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         val r = ble.send(Cmd.SLOT_DATA_CONFIG_SAVE, timeoutMs = 5000L)
         if (n.isNotEmpty()) {
             val slot = _activeSlot.value
+            slotNameCache[slot] = n
             val d = (_slotDetails.value[slot] ?: SlotDetail()).copy(loaded = true, nameHF = n, nameLF = n)
             _slotDetails.value = _slotDetails.value + (slot to d)
             log(if (r.genericOk) "Saved. Slot ${slot + 1} named \"$n\"." else "Save failed (${Status.label(r.status)}).")
@@ -430,6 +442,7 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         val r = ble.send(Cmd.HF14A_SET_ANTI_COLL_DATA, p.toByteArray())
         if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return false }
         setSlotNick(slot, SENSE_HF, name)
+        if (name.isNotBlank()) slotNameCache[slot] = name.trim()
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         loadSlotsInner()
         log("Saved HF UID ${t.uid.hexSpaced()} to slot ${slot + 1}${if (name.isNotBlank()) " (\"${name.trim()}\")" else ""}.")
@@ -443,6 +456,7 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         val r = ble.send(Cmd.EM410X_SET_EMU_ID, id)
         if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return false }
         setSlotNick(slot, SENSE_LF, name)
+        if (name.isNotBlank()) slotNameCache[slot] = name.trim()
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         val g = ble.send(Cmd.EM410X_GET_EMU_ID)
         if (g.genericOk && g.data.size >= 5) log("Slot ${slot + 1} stores EM410x ${emIdBytes(g.data).hexSpaced()} (readback).")
@@ -471,6 +485,7 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         ble.send(Cmd.DELETE_SLOT_TAG_NICK, byteArrayOf(slot.toByte(), SENSE_LF.toByte()))
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         _slotDetails.value = _slotDetails.value - slot
+        slotNameCache[slot] = ""
         log("Slot ${slot + 1} cleared.")
         loadSlotsInner()
     }

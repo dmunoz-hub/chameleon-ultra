@@ -78,6 +78,7 @@ struct SlotRow: Identifiable {
     let lfEnabled: Bool
     let hfType: Int
     let lfType: Int
+    var name: String = ""
 }
 
 struct SlotDetailData: Equatable {
@@ -106,6 +107,7 @@ final class ChameleonController: ObservableObject {
 
     let ble = ChameleonBLE()
     private var cancellables = Set<AnyCancellable>()
+    private var slotNameCache: [Int: String] = [:]
 
     // Default T5577 key set used by the CLI (verbatim from chameleon_cmd.py).
     static let t55NewKey: [UInt8]   = [0x20, 0x20, 0x66, 0x66]
@@ -606,24 +608,37 @@ final class ChameleonController: ObservableObject {
         }
     }
 
-    private func loadSlotsInner() async throws {
+    private func slotNick(_ slot: Int, _ sense: UInt8) async -> String {
+        if let r = try? await ble.send(.getSlotTagNick, data: [UInt8(slot), sense]), r.genericOk {
+            return (String(bytes: r.data, encoding: .utf8) ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "\u{0}").union(.whitespacesAndNewlines))
+        }
+        return ""
+    }
+
+    private func loadSlotsInner(fetchNicks: Bool = false) async throws {
         let act = try await ble.send(.getActiveSlot)
         let en = try await ble.send(.getEnabledSlots)
         let info = try await ble.send(.getSlotInfo)
         guard en.genericOk, info.genericOk else { line("Failed to read slots."); return }
         activeSlot = Int(act.data.first ?? 0)
+        if fetchNicks {
+            for i in 0..<8 {
+                let h = await slotNick(i, Self.senseHF)
+                slotNameCache[i] = h.isEmpty ? await slotNick(i, Self.senseLF) : h
+            }
+        }
         var rows: [SlotRow] = []
         for i in 0..<8 {
             let hfEn = en.data.count > i*2   && en.data[i*2]   != 0
             let lfEn = en.data.count > i*2+1 && en.data[i*2+1] != 0
             let hfType = info.data.count > i*4+1 ? (Int(info.data[i*4]) << 8 | Int(info.data[i*4+1])) : 0
             let lfType = info.data.count > i*4+3 ? (Int(info.data[i*4+2]) << 8 | Int(info.data[i*4+3])) : 0
-            rows.append(SlotRow(id: i, hfEnabled: hfEn, lfEnabled: lfEn, hfType: hfType, lfType: lfType))
+            rows.append(SlotRow(id: i, hfEnabled: hfEn, lfEnabled: lfEn, hfType: hfType, lfType: lfType, name: slotNameCache[i] ?? ""))
         }
         slots = rows
     }
 
-    func loadSlots() { run("Slots") { try await self.loadSlotsInner() } }
+    func loadSlots() { run("Slots") { try await self.loadSlotsInner(fetchNicks: true) } }
 
     func setActiveSlotButton(_ n: Int) {
         run("Active slot") {
@@ -652,6 +667,7 @@ final class ChameleonController: ObservableObject {
             }
             let r = try await self.ble.send(.slotDataConfigSave, timeout: 5)
             if !n.isEmpty {
+                self.slotNameCache[self.activeSlot] = n
                 var d = self.slotDetails[self.activeSlot] ?? SlotDetailData()
                 d.loaded = true; d.nameHF = n; d.nameLF = n
                 self.slotDetails[self.activeSlot] = d
@@ -695,6 +711,7 @@ final class ChameleonController: ObservableObject {
         let r = try await ble.send(.hf14aSetAntiColl, data: p)
         guard r.genericOk else { line("Set anti-coll failed (\(r.statusEnum.label))."); return false }
         await setSlotNick(slot, sense: Self.senseHF, name: name)
+        let tn = name.trimmingCharacters(in: .whitespacesAndNewlines); if !tn.isEmpty { slotNameCache[activeSlot] = tn }
         _ = try await ble.send(.slotDataConfigSave)
         try await loadSlotsInner()
         let suffix = name.isEmpty ? "" : " (\"\(name)\")"
@@ -711,6 +728,7 @@ final class ChameleonController: ObservableObject {
         let r = try await ble.send(.em410xSetEmuId, data: id)
         guard r.genericOk else { line("Set EM410x emu id failed (\(r.statusEnum.label))."); return false }
         await setSlotNick(slot, sense: Self.senseLF, name: name)
+        let tn = name.trimmingCharacters(in: .whitespacesAndNewlines); if !tn.isEmpty { slotNameCache[activeSlot] = tn }
         _ = try await ble.send(.slotDataConfigSave)
         let g = try await ble.send(.em410xGetEmuId)
         if g.genericOk, g.data.count >= 5 {
@@ -748,6 +766,7 @@ final class ChameleonController: ObservableObject {
             _ = try? await self.ble.send(.deleteSlotTagNick, data: [UInt8(slot), Self.senseLF])
             _ = try await self.ble.send(.slotDataConfigSave)
             self.slotDetails[slot] = nil
+            self.slotNameCache[slot] = ""
             self.line("Slot \(slot + 1) cleared.")
             try await self.loadSlotsInner()
         }
