@@ -250,8 +250,10 @@ struct ContentView: View {
             }
             ForEach(c.slots) { s in
                 HStack(spacing: 6) {
-                    Text("\(s.id == c.activeSlot ? "● " : "")Slot \(s.id + 1)")
-                        .font(.caption).frame(width: 64, alignment: .leading)
+                    Button { c.slotDetail(s) } label: {
+                        Text("\(s.id == c.activeSlot ? "● " : "")S\(s.id + 1)").font(.caption)
+                    }
+                    .buttonStyle(.bordered).controlSize(.mini).frame(width: 58, alignment: .leading).disabled(!canAct)
                     Text("HF \(ChameleonController.tagName(s.hfType))")
                         .font(.caption2).foregroundStyle(s.hfEnabled ? Color.green : Color.secondary).lineLimit(1)
                     Text("LF \(ChameleonController.tagName(s.lfType))")
@@ -266,7 +268,7 @@ struct ContentView: View {
                     }
                 }
             }
-            Note("Load the 8 slots, toggle HF/LF, pick the active one. Emulate loads the last HF UID or EM410x ID into the active slot and switches to tag mode. Save to keep across reboots.")
+            Note("Load the 8 slots, then tap a slot (S#) to inspect its name, UID/ID and data. Toggle HF/LF, pick the active one. Emulate loads the last read card into the active slot and switches to tag mode. Save to keep across reboots.")
         }
     }
 

@@ -225,7 +225,10 @@ private fun ChameleonScreen(vm: ChameleonController) {
                 }
                 slots.forEach { s ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("${if (s.index == active) "● " else ""}S${s.index + 1}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(40.dp))
+                        TextButton(onClick = { vm.slotDetail(s) }, enabled = canAct,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.width(54.dp)) {
+                            Text("${if (s.index == active) "● " else ""}S${s.index + 1}", style = MaterialTheme.typography.bodySmall)
+                        }
                         Text("HF ${slotTagName(s.hfType)}", fontSize = 10.sp, maxLines = 1,
                             color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                         Text("LF ${slotTagName(s.lfType)}", fontSize = 10.sp, maxLines = 1,
@@ -242,7 +245,7 @@ private fun ChameleonScreen(vm: ChameleonController) {
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
                     }
                 }
-                Hint("Load the 8 slots, toggle HF/LF, pick the active one. Emulate loads the last HF UID or EM410x ID into the active slot and switches to tag mode. Save to keep across reboots.")
+                Hint("Load the 8 slots, then tap a slot (S#) to inspect its name, UID/ID and data. Toggle HF/LF, pick the active one. Emulate loads the last read card into the active slot and switches to tag mode. Save to keep across reboots.")
             }
 
             // Log

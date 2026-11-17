@@ -435,6 +435,40 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         ble.send(Cmd.SAVE_SETTINGS)
         log(if (full) "LED animation set to Full (saved). The LED now flashes on field detect." else "LED animation set to None (saved).")
     }
+
+    // Inspect one slot: name (nick), emulated UID/ID, type, HF block 0.
+    fun slotDetail(s: SlotRow) = run("Slot ${s.index + 1}") {
+        ble.send(Cmd.SET_ACTIVE_SLOT, byteArrayOf(s.index.toByte()))
+        _activeSlot.value = s.index
+        suspend fun nick(sense: Int): String {
+            val r = ble.send(Cmd.GET_SLOT_TAG_NICK, byteArrayOf(s.index.toByte(), sense.toByte()))
+            return if (r.genericOk) String(r.data, Charsets.UTF_8).trim('\u0000', ' ', '\n', '\r') else ""
+        }
+        val nameHF = nick(SENSE_HF)
+        val nameLF = nick(SENSE_LF)
+        log("── Slot ${s.index + 1} ──")
+        log("Name — HF: ${if (nameHF.isEmpty()) "—" else nameHF}   LF: ${if (nameLF.isEmpty()) "—" else nameLF}")
+        if (s.hfType != 0) {
+            val ac = ble.send(Cmd.HF14A_GET_ANTI_COLL_DATA)
+            if (ac.genericOk && ac.data.isNotEmpty()) {
+                val d = ac.data; val ul = d[0].toInt() and 0xFF; var o = 1
+                if (d.size >= 1 + ul + 3) {
+                    val uid = d.copyOfRange(o, o + ul); o += ul
+                    val atqa = d.copyOfRange(o, o + 2); o += 2
+                    val sak = d[o].toInt() and 0xFF
+                    log("HF ${slotTagName(s.hfType)} — UID ${uid.hexSpaced()}  SAK %02X  ATQA ${atqa.hexSpaced()}".format(sak))
+                } else log("HF ${slotTagName(s.hfType)} — (no anti-coll data)")
+            } else log("HF ${slotTagName(s.hfType)} — (no anti-coll data)")
+            val b0 = ble.send(Cmd.MF1_READ_EMU_BLOCK_DATA, byteArrayOf(0, 1))
+            if (b0.genericOk && b0.data.size >= 16) log("HF block 0: ${b0.data.copyOfRange(0, 16).hexSpaced()}")
+        }
+        if (s.lfType == 100) {
+            val id = ble.send(Cmd.EM410X_GET_EMU_ID)
+            if (id.genericOk && id.data.size >= 5) log("LF EM410x ID: ${id.data.copyOfRange(0, 5).hexSpaced()}")
+        }
+        if (s.hfType == 0 && s.lfType != 100 && nameHF.isEmpty() && nameLF.isEmpty()) log("(slot is empty / default)")
+        loadSlotsInner()
+    }
 }
 
 const val SENSE_LF = 1

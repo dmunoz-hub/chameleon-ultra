@@ -11,6 +11,7 @@ object Cmd {
     const val SET_SLOT_TAG_TYPE = 1004
     const val SET_SLOT_DATA_DEFAULT = 1005
     const val SET_SLOT_ENABLE = 1006
+    const val GET_SLOT_TAG_NICK = 1008
     const val SLOT_DATA_CONFIG_SAVE = 1009
     const val GET_DEVICE_CHIP_ID = 1011
     const val SAVE_SETTINGS = 1013
@@ -20,6 +21,8 @@ object Cmd {
     const val GET_ENABLED_SLOTS = 1023
     const val GET_BATTERY_INFO = 1025
     const val HF14A_SET_ANTI_COLL_DATA = 4001
+    const val MF1_READ_EMU_BLOCK_DATA = 4008
+    const val HF14A_GET_ANTI_COLL_DATA = 4018
     const val EM410X_SET_EMU_ID = 5000
     const val EM410X_GET_EMU_ID = 5001
     const val HF14A_SCAN = 2000

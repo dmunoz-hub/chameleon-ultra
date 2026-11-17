@@ -225,10 +225,10 @@ const CMD = {
   MF1_DETECT_PRNG:2002, MF1_STATIC_NESTED_ACQUIRE:2003, MF1_DARKSIDE_ACQUIRE:2004,
   MF1_DETECT_NT_DIST:2005, MF1_NESTED_ACQUIRE:2006, MF1_AUTH_ONE_KEY_BLOCK:2007,
   MF1_READ_ONE_BLOCK:2008, MF1_WRITE_ONE_BLOCK:2009, HF14A_RAW:2010, MF1_CHECK_KEYS_ON_BLOCK:2015,
-  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_DATA_DEFAULT:1005, SET_SLOT_ENABLE:1006, SLOT_DATA_CONFIG_SAVE:1009,
+  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_DATA_DEFAULT:1005, SET_SLOT_ENABLE:1006, GET_SLOT_TAG_NICK:1008, SLOT_DATA_CONFIG_SAVE:1009,
   SAVE_SETTINGS:1013, SET_ANIMATION_MODE:1015, GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, GET_ENABLED_SLOTS:1023,
   EM410X_SCAN:3000, EM410X_WRITE_TO_T55XX:3001,
-  HF14A_SET_ANTI_COLL_DATA:4001, EM410X_SET_EMU_ID:5000, EM410X_GET_EMU_ID:5001,
+  HF14A_SET_ANTI_COLL_DATA:4001, MF1_READ_EMU_BLOCK_DATA:4008, HF14A_GET_ANTI_COLL_DATA:4018, EM410X_SET_EMU_ID:5000, EM410X_GET_EMU_ID:5001,
 };
 // Sense types and a few emulation tag types.
 const SENSE_LF = 1, SENSE_HF = 2;
@@ -712,6 +712,7 @@ function renderSlots(slots){
     right.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end";
     right.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span><span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`;
     const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "padding:4px 8px;font-size:.72rem"; b.onclick = () => guard(fn); return b; };
+    right.appendChild(mk("View", () => slotDetail(s)));
     right.appendChild(mk(s.hfEn ? "HF ✓" : "HF ✕", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
     right.appendChild(mk(s.lfEn ? "LF ✓" : "LF ✕", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
     if(s.i !== activeSlot) right.appendChild(mk("Active", () => setActiveSlot(s.i)));
@@ -776,6 +777,34 @@ async function setAnimation(full){
   await send(CMD.SET_ANIMATION_MODE, [full ? 0 : 2]); // 0=FULL, 2=NONE
   await send(CMD.SAVE_SETTINGS);
   logLine("sys", full ? "LED animation set to Full (saved). The LED now flashes on field detect." : "LED animation set to None (saved).");
+}
+// Inspect one slot: name (nick), emulated UID/ID, type, HF block 0.
+async function slotDetail(s){
+  const slot = s.i;
+  await send(CMD.SET_ACTIVE_SLOT, [slot]); activeSlot = slot;
+  const dec = (bytes) => { try { return new TextDecoder().decode(Uint8Array.from(bytes)).replace(/\0+$/, "").trim(); } catch(e){ return ""; } };
+  const nHF = await send(CMD.GET_SLOT_TAG_NICK, [slot, SENSE_HF]);
+  const nLF = await send(CMD.GET_SLOT_TAG_NICK, [slot, SENSE_LF]);
+  const nameHF = nHF.status === 0x68 ? dec(nHF.data) : "";
+  const nameLF = nLF.status === 0x68 ? dec(nLF.data) : "";
+  logLine("sys", `── Slot ${slot+1} ──`);
+  logLine("sys", `Name — HF: ${nameHF || "—"}   LF: ${nameLF || "—"}`);
+  if(s.hfType){
+    const ac = await send(CMD.HF14A_GET_ANTI_COLL_DATA);
+    if(ac.status === 0x68 && ac.data.length >= 1){
+      const d = ac.data; let o = 0; const ul = d[o++]; const uid = Array.from(d.slice(o, o+ul)); o += ul;
+      const atqa = Array.from(d.slice(o, o+2)); o += 2; const sak = d[o++];
+      logLine("sys", `HF ${tagName(s.hfType)} — UID ${hexS(uid)}  SAK ${hex([sak])}  ATQA ${hexS(atqa)}`);
+    } else logLine("sys", `HF ${tagName(s.hfType)} — (no anti-coll data)`);
+    const b0 = await send(CMD.MF1_READ_EMU_BLOCK_DATA, [0, 1]);
+    if(b0.status === 0x68 && b0.data.length >= 16) logLine("sys", `HF block 0: ${hexS(Array.from(b0.data.slice(0, 16)))}`);
+  }
+  if(s.lfType === 100){
+    const id = await send(CMD.EM410X_GET_EMU_ID);
+    if(id.status === 0x68 && id.data.length >= 5) logLine("sys", `LF EM410x ID: ${hexS(Array.from(id.data.slice(0, 5)))}`);
+  }
+  if(!s.hfType && s.lfType !== 100 && !nameHF && !nameLF) logLine("sys", "(slot is empty / default)");
+  await loadSlots();
 }
 
 // ---- UI ----

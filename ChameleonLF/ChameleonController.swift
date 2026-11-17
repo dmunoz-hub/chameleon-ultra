@@ -709,4 +709,45 @@ final class ChameleonController: ObservableObject {
             self.line(full ? "LED animation set to Full (saved). The LED now flashes on field detect." : "LED animation set to None (saved).")
         }
     }
+
+    // Inspect one slot: name (nick), emulated UID/ID, type, HF block 0.
+    func slotDetail(_ s: SlotRow) {
+        run("Slot \(s.id + 1)") {
+            _ = try await self.ble.send(.setActiveSlot, data: [UInt8(s.id)])
+            self.activeSlot = s.id
+
+            func nick(_ sense: UInt8) async -> String {
+                if let r = try? await self.ble.send(.getSlotTagNick, data: [UInt8(s.id), sense]), r.genericOk {
+                    let str = String(bytes: r.data, encoding: .utf8) ?? ""
+                    return str.trimmingCharacters(in: CharacterSet(charactersIn: "\u{0}").union(.whitespacesAndNewlines))
+                }
+                return ""
+            }
+            let nameHF = await nick(Self.senseHF)
+            let nameLF = await nick(Self.senseLF)
+            self.line("── Slot \(s.id + 1) ──")
+            self.line("Name — HF: \(nameHF.isEmpty ? "—" : nameHF)   LF: \(nameLF.isEmpty ? "—" : nameLF)")
+
+            if s.hfType != 0 {
+                let ac = try await self.ble.send(.hf14aGetAntiColl)
+                if ac.genericOk, let first = ac.data.first {
+                    let d = ac.data; let ul = Int(first); var o = 1
+                    if d.count >= 1 + ul + 3 {
+                        let uid = Array(d[o ..< o + ul]); o += ul
+                        let atqa = Array(d[o ..< o + 2]); o += 2
+                        let sak = d[o]
+                        self.line("HF \(Self.tagName(s.hfType)) — UID \(ChameleonFrame.hexSpaced(uid))  SAK \(ChameleonFrame.hex(sak))  ATQA \(ChameleonFrame.hexSpaced(atqa))")
+                    } else { self.line("HF \(Self.tagName(s.hfType)) — (no anti-coll data)") }
+                } else { self.line("HF \(Self.tagName(s.hfType)) — (no anti-coll data)") }
+                let b0 = try await self.ble.send(.mf1ReadEmuBlockData, data: [0, 1])
+                if b0.genericOk, b0.data.count >= 16 { self.line("HF block 0: \(ChameleonFrame.hexSpaced(Array(b0.data.prefix(16))))") }
+            }
+            if s.lfType == 100 {
+                let id = try await self.ble.send(.em410xGetEmuId)
+                if id.genericOk, id.data.count >= 5 { self.line("LF EM410x ID: \(ChameleonFrame.hexSpaced(Array(id.data.prefix(5))))") }
+            }
+            if s.hfType == 0 && s.lfType != 100 && nameHF.isEmpty && nameLF.isEmpty { self.line("(slot is empty / default)") }
+            try await self.loadSlotsInner()
+        }
+    }
 }
