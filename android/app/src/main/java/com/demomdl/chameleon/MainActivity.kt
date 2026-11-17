@@ -256,14 +256,12 @@ private fun ChameleonScreen(vm: ChameleonController) {
                             }
                             if (s.index != active) TextButton(onClick = { vm.setActiveSlot(s.index) }, enabled = canAct,
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
-                        }
-                        if (expandedSlots.contains(s.index)) {
-                            SlotDetailCard(s, details[s.index])
                             TextButton(onClick = { vm.clearSlot(s.index) }, enabled = canAct,
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-                                Text("Clear slot", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                                Text("Clr", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
                             }
                         }
+                        if (expandedSlots.contains(s.index)) SlotDetailCard(s, details[s.index])
                     }
                 }
                 Hint("Load the 8 slots, then tap a slot (S#) to inspect its name, UID/ID and data. Toggle HF/LF, pick the active one. Emulate loads the last read card into the active slot and switches to tag mode. Save to keep across reboots.")

@@ -278,11 +278,10 @@ struct ContentView: View {
                         if s.id != c.activeSlot {
                             Button("Use") { c.setActiveSlotButton(s.id) }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
                         }
+                        Button("Clr") { c.clearSlot(s.id) }.buttonStyle(.bordered).controlSize(.mini).tint(.red).disabled(!canAct)
                     }
                     if expandedSlots.contains(s.id) {
                         SlotDetailCard(slot: s, detail: c.slotDetails[s.id])
-                        Button("Clear slot") { c.clearSlot(s.id) }
-                            .buttonStyle(.bordered).controlSize(.small).tint(.red).disabled(!canAct)
                     }
                 }
             }

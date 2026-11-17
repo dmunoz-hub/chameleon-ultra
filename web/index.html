@@ -726,14 +726,12 @@ function renderSlots(slots){
     row.appendChild(mk(s.hfEn ? "HF ✓" : "HF ✕", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
     row.appendChild(mk(s.lfEn ? "LF ✓" : "LF ✕", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
     if(s.i !== activeSlot) row.appendChild(mk("Active", () => setActiveSlot(s.i)));
+    const clr = mk("Clr", () => clearSlot(s.i)); clr.style.color = "var(--err)"; row.appendChild(clr);
     wrap.appendChild(row);
     if(expandedSlots.has(s.i)){
       const det = document.createElement("div");
       det.style.cssText = "margin:6px 0 2px 8px;padding:9px 11px;background:var(--panel2);border-radius:9px;font-size:.8rem";
       det.innerHTML = slotDetailCache[s.i] ? renderDetailHTML(s, slotDetailCache[s.i]) : "Loading…";
-      const clr = document.createElement("button"); clr.textContent = "Clear slot";
-      clr.style.cssText = "margin-top:8px;padding:4px 9px;font-size:.72rem"; clr.onclick = () => guard(() => clearSlot(s.i));
-      det.appendChild(clr);
       wrap.appendChild(det);
     }
     el.appendChild(wrap);
