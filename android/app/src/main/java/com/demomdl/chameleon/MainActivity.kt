@@ -19,8 +19,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,7 +69,9 @@ private fun ChameleonScreen(vm: ChameleonController) {
     val foundKey by vm.foundKey.collectAsState()
     val slots by vm.slots.collectAsState()
     val active by vm.activeSlot.collectAsState()
+    val details by vm.slotDetails.collectAsState()
     val logLines by vm.log.collectAsState()
+    var expandedSlots by remember { mutableStateOf(setOf<Int>()) }
 
     val canAct = connected && !busy
 
@@ -224,25 +230,30 @@ private fun ChameleonScreen(vm: ChameleonController) {
                     SmallBtn("LED Full", canAct, Modifier.weight(1f)) { vm.setAnimation(true) }
                 }
                 slots.forEach { s ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        TextButton(onClick = { vm.slotDetail(s) }, enabled = canAct,
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.width(54.dp)) {
-                            Text("${if (s.index == active) "● " else ""}S${s.index + 1}", style = MaterialTheme.typography.bodySmall)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            TextButton(onClick = {
+                                expandedSlots = if (expandedSlots.contains(s.index)) expandedSlots - s.index
+                                                else { vm.loadSlotDetail(s); expandedSlots + s.index }
+                            }, enabled = canAct, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp), modifier = Modifier.width(62.dp)) {
+                                Text("${if (expandedSlots.contains(s.index)) "▾" else "▸"}${if (s.index == active) "●" else ""}S${s.index + 1}", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text("HF ${slotTagName(s.hfType)}", fontSize = 10.sp, maxLines = 1,
+                                color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            Text("LF ${slotTagName(s.lfType)}", fontSize = 10.sp, maxLines = 1,
+                                color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_HF, !s.hfEnabled) }, enabled = canAct,
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                                Text(if (s.hfEnabled) "HF✓" else "HF✕", fontSize = 10.sp, color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_LF, !s.lfEnabled) }, enabled = canAct,
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                                Text(if (s.lfEnabled) "LF✓" else "LF✕", fontSize = 10.sp, color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (s.index != active) TextButton(onClick = { vm.setActiveSlot(s.index) }, enabled = canAct,
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
                         }
-                        Text("HF ${slotTagName(s.hfType)}", fontSize = 10.sp, maxLines = 1,
-                            color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                        Text("LF ${slotTagName(s.lfType)}", fontSize = 10.sp, maxLines = 1,
-                            color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_HF, !s.hfEnabled) }, enabled = canAct,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
-                            Text(if (s.hfEnabled) "HF✓" else "HF✕", fontSize = 10.sp, color = if (s.hfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        TextButton(onClick = { vm.setSlotEnable(s.index, SENSE_LF, !s.lfEnabled) }, enabled = canAct,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
-                            Text(if (s.lfEnabled) "LF✓" else "LF✕", fontSize = 10.sp, color = if (s.lfEnabled) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (s.index != active) TextButton(onClick = { vm.setActiveSlot(s.index) }, enabled = canAct,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
+                        if (expandedSlots.contains(s.index)) SlotDetailCard(s, details[s.index])
                     }
                 }
                 Hint("Load the 8 slots, then tap a slot (S#) to inspect its name, UID/ID and data. Toggle HF/LF, pick the active one. Emulate loads the last read card into the active slot and switches to tag mode. Save to keep across reboots.")
@@ -263,6 +274,43 @@ private fun ChameleonScreen(vm: ChameleonController) {
 }
 
 // ---- small composables ----
+
+@Composable
+private fun SlotDetailCard(slot: SlotRow, d: SlotDetail?) {
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (d == null || !d.loaded) {
+                Text("Loading…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                if (d.name.isNotEmpty()) Text(d.name, style = MaterialTheme.typography.titleSmall)
+                if (slot.hfType != 0) {
+                    SenseRow("HF", slotTagName(slot.hfType), slot.hfEnabled)
+                    if (d.hfUid.isNotEmpty()) MonoLine("UID ${d.hfUid}")
+                    if (d.hfBlock0.isNotEmpty()) MonoLine("Blk0 ${d.hfBlock0}")
+                }
+                if (slot.lfType != 0) {
+                    SenseRow("LF", slotTagName(slot.lfType), slot.lfEnabled)
+                    if (d.lfId.isNotEmpty()) MonoLine("ID ${d.lfId}")
+                }
+                if (slot.hfType == 0 && slot.lfType == 0) Text("Empty / default", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SenseRow(label: String, type: String, on: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(7.dp).background(if (on) Color(0xFF3FB950) else MaterialTheme.colorScheme.outline, CircleShape))
+        Text("$label · $type", style = MaterialTheme.typography.bodySmall)
+        Text(if (on) "ON" else "OFF", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (on) Color(0xFF3FB950) else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun MonoLine(t: String) {
+    Text(t, fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 13.dp))
+}
 
 @Composable
 private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {

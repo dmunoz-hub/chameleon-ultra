@@ -237,6 +237,9 @@ const TAG_NAMES = {0:"—",100:"EM410x",101:"EM410x/16",102:"EM410x/32",103:"EM4
 function tagName(v){ return TAG_NAMES[v] ?? (v ? "type "+v : "—"); }
 let lastHF = null;       // last scanned HF tag {uid,atqa,sak,ats}
 let activeSlot = 0;      // current active slot (0-based)
+let slotsCache = [];     // last loaded slots
+let expandedSlots = new Set();
+let slotDetailCache = {};
 const STATUS_LABEL = {0x00:"HF tag OK",0x01:"no HF tag",0x06:"MIFARE auth failed",
   0x40:"LF tag OK",0x41:"no LF tag",0x60:"parity error",0x66:"wrong device mode",
   0x67:"invalid command",0x68:"success",0x69:"not implemented"};
@@ -704,20 +707,45 @@ async function loadSlots(){
 }
 function guard(fn){ Promise.resolve().then(fn).catch(e => logLine("err", e.message || String(e))); }
 function renderSlots(slots){
+  slotsCache = slots;
   const el = document.getElementById("slotList"); el.innerHTML = "";
+  const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "padding:4px 8px;font-size:.72rem"; b.onclick = () => guard(fn); return b; };
   for(const s of slots){
-    const row = document.createElement("div"); row.className = "kv"; row.style.alignItems = "center";
-    row.innerHTML = `<span class="k">${s.i === activeSlot ? "● " : ""}Slot ${s.i+1}</span>`;
-    const right = document.createElement("span");
-    right.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end";
-    right.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span><span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`;
-    const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "padding:4px 8px;font-size:.72rem"; b.onclick = () => guard(fn); return b; };
-    right.appendChild(mk("View", () => slotDetail(s)));
-    right.appendChild(mk(s.hfEn ? "HF ✓" : "HF ✕", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
-    right.appendChild(mk(s.lfEn ? "LF ✓" : "LF ✕", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
-    if(s.i !== activeSlot) right.appendChild(mk("Active", () => setActiveSlot(s.i)));
-    row.appendChild(right); el.appendChild(row);
+    const wrap = document.createElement("div"); wrap.style.cssText = "border-bottom:1px dashed var(--line);padding:5px 0";
+    const row = document.createElement("div"); row.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+    const head = mk(`${expandedSlots.has(s.i) ? "▾" : "▸"} ${s.i === activeSlot ? "● " : ""}S${s.i+1}`, () => toggleSlot(s));
+    row.appendChild(head);
+    const pills = document.createElement("span"); pills.style.cssText = "display:flex;gap:6px;flex:1;flex-wrap:wrap";
+    pills.innerHTML = `<span class="pill ${s.hfEn?'ok':'no'}">HF ${tagName(s.hfType)}</span><span class="pill ${s.lfEn?'ok':'no'}">LF ${tagName(s.lfType)}</span>`;
+    row.appendChild(pills);
+    row.appendChild(mk(s.hfEn ? "HF ✓" : "HF ✕", () => setSlotEnable(s.i, SENSE_HF, !s.hfEn)));
+    row.appendChild(mk(s.lfEn ? "LF ✓" : "LF ✕", () => setSlotEnable(s.i, SENSE_LF, !s.lfEn)));
+    if(s.i !== activeSlot) row.appendChild(mk("Active", () => setActiveSlot(s.i)));
+    wrap.appendChild(row);
+    if(expandedSlots.has(s.i)){
+      const det = document.createElement("div");
+      det.style.cssText = "margin:6px 0 2px 8px;padding:9px 11px;background:var(--panel2);border-radius:9px;font-size:.8rem";
+      det.innerHTML = slotDetailCache[s.i] ? renderDetailHTML(s, slotDetailCache[s.i]) : "Loading…";
+      wrap.appendChild(det);
+    }
+    el.appendChild(wrap);
   }
+}
+function toggleSlot(s){
+  if(expandedSlots.has(s.i)){ expandedSlots.delete(s.i); renderSlots(slotsCache); }
+  else { expandedSlots.add(s.i); renderSlots(slotsCache); guard(() => loadSlotDetail(s)); }
+}
+function renderDetailHTML(s, d){
+  const sense = (label,type,on,val) =>
+    `<div style="display:flex;gap:6px;align-items:center;margin-top:3px"><span style="width:8px;height:8px;border-radius:50%;background:${on?'var(--ok)':'var(--muted)'}"></span><span>${label} · ${type}</span><span style="font-weight:700;font-size:.72rem;color:${on?'var(--ok)':'var(--muted)'}">${on?'ON':'OFF'}</span></div>`
+    + (val ? `<div style="font-family:var(--mono);color:var(--muted);font-size:.74rem;margin-left:14px">${val}</div>` : "");
+  let h = "";
+  if(d.name) h += `<div style="font-weight:600;font-size:.9rem;margin-bottom:2px">${d.name}</div>`;
+  if(s.hfType){ h += sense("HF", tagName(s.hfType), s.hfEn, d.hfUid ? ("UID "+d.hfUid) : "");
+    if(d.hfBlock0) h += `<div style="font-family:var(--mono);color:var(--muted);font-size:.74rem;margin-left:14px">Blk0 ${d.hfBlock0}</div>`; }
+  if(s.lfType) h += sense("LF", tagName(s.lfType), s.lfEn, d.lfId ? ("ID "+d.lfId) : "");
+  if(!s.hfType && !s.lfType) h += `<div style="color:var(--muted)">Empty / default</div>`;
+  return h;
 }
 async function setActiveSlot(n){
   const r = await send(CMD.SET_ACTIVE_SLOT, [n]);
@@ -778,33 +806,23 @@ async function setAnimation(full){
   await send(CMD.SAVE_SETTINGS);
   logLine("sys", full ? "LED animation set to Full (saved). The LED now flashes on field detect." : "LED animation set to None (saved).");
 }
-// Inspect one slot: name (nick), emulated UID/ID, type, HF block 0.
-async function slotDetail(s){
-  const slot = s.i;
-  await send(CMD.SET_ACTIVE_SLOT, [slot]); activeSlot = slot;
+// Inspect one slot -> slotDetailCache[i], then re-render inline.
+async function loadSlotDetail(s){
+  await send(CMD.SET_ACTIVE_SLOT, [s.i]); activeSlot = s.i;
   const dec = (bytes) => { try { return new TextDecoder().decode(Uint8Array.from(bytes)).replace(/\0+$/, "").trim(); } catch(e){ return ""; } };
-  const nHF = await send(CMD.GET_SLOT_TAG_NICK, [slot, SENSE_HF]);
-  const nLF = await send(CMD.GET_SLOT_TAG_NICK, [slot, SENSE_LF]);
-  const nameHF = nHF.status === 0x68 ? dec(nHF.data) : "";
-  const nameLF = nLF.status === 0x68 ? dec(nLF.data) : "";
-  logLine("sys", `── Slot ${slot+1} ──`);
-  logLine("sys", `Name — HF: ${nameHF || "—"}   LF: ${nameLF || "—"}`);
+  const nHF = await send(CMD.GET_SLOT_TAG_NICK, [s.i, SENSE_HF]);
+  const nLF = await send(CMD.GET_SLOT_TAG_NICK, [s.i, SENSE_LF]);
+  const d = { nameHF: nHF.status===0x68 ? dec(nHF.data) : "", nameLF: nLF.status===0x68 ? dec(nLF.data) : "", hfUid:"", hfBlock0:"", lfId:"" };
+  d.name = d.nameHF || d.nameLF;
   if(s.hfType){
     const ac = await send(CMD.HF14A_GET_ANTI_COLL_DATA);
-    if(ac.status === 0x68 && ac.data.length >= 1){
-      const d = ac.data; let o = 0; const ul = d[o++]; const uid = Array.from(d.slice(o, o+ul)); o += ul;
-      const atqa = Array.from(d.slice(o, o+2)); o += 2; const sak = d[o++];
-      logLine("sys", `HF ${tagName(s.hfType)} — UID ${hexS(uid)}  SAK ${hex([sak])}  ATQA ${hexS(atqa)}`);
-    } else logLine("sys", `HF ${tagName(s.hfType)} — (no anti-coll data)`);
+    if(ac.status===0x68 && ac.data.length>=1){ const ul = ac.data[0]; if(ac.data.length >= 1+ul) d.hfUid = hexS(Array.from(ac.data.slice(1, 1+ul))); }
     const b0 = await send(CMD.MF1_READ_EMU_BLOCK_DATA, [0, 1]);
-    if(b0.status === 0x68 && b0.data.length >= 16) logLine("sys", `HF block 0: ${hexS(Array.from(b0.data.slice(0, 16)))}`);
+    if(b0.status===0x68 && b0.data.length>=16) d.hfBlock0 = hexS(Array.from(b0.data.slice(0, 16)));
   }
-  if(s.lfType === 100){
-    const id = await send(CMD.EM410X_GET_EMU_ID);
-    if(id.status === 0x68 && id.data.length >= 5) logLine("sys", `LF EM410x ID: ${hexS(Array.from(id.data.slice(0, 5)))}`);
-  }
-  if(!s.hfType && s.lfType !== 100 && !nameHF && !nameLF) logLine("sys", "(slot is empty / default)");
-  await loadSlots();
+  if(s.lfType===100){ const id = await send(CMD.EM410X_GET_EMU_ID); if(id.status===0x68 && id.data.length>=5) d.lfId = hexS(Array.from(id.data.slice(0, 5))); }
+  slotDetailCache[s.i] = d;
+  renderSlots(slotsCache);
 }
 
 // ---- UI ----

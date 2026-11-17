@@ -22,6 +22,8 @@ struct ContentView: View {
     // Darkside inputs
     @State private var dsBlock = "3"
     @State private var dsB = false
+    // Expanded slot rows
+    @State private var expandedSlots: Set<Int> = []
 
     private var canAct: Bool { c.isConnected && !c.busy }
     private func u8(_ s: String) -> UInt8 { UInt8(s.trimmingCharacters(in: .whitespaces)) ?? 0 }
@@ -249,22 +251,33 @@ struct ContentView: View {
                 SmallButton("LED Full", disabled: !canAct) { c.setAnimation(full: true) }
             }
             ForEach(c.slots) { s in
-                HStack(spacing: 6) {
-                    Button { c.slotDetail(s) } label: {
-                        Text("\(s.id == c.activeSlot ? "● " : "")S\(s.id + 1)").font(.caption)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Button {
+                            if expandedSlots.contains(s.id) { expandedSlots.remove(s.id) }
+                            else { expandedSlots.insert(s.id); c.loadSlotDetail(s) }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: expandedSlots.contains(s.id) ? "chevron.down" : "chevron.right").font(.system(size: 9))
+                                Text("\(s.id == c.activeSlot ? "● " : "")S\(s.id + 1)").font(.caption)
+                            }
+                        }
+                        .buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                        Text("HF \(ChameleonController.tagName(s.hfType))")
+                            .font(.caption2).foregroundStyle(s.hfEnabled ? Color.green : Color.secondary).lineLimit(1)
+                        Text("LF \(ChameleonController.tagName(s.lfType))")
+                            .font(.caption2).foregroundStyle(s.lfEnabled ? Color.green : Color.secondary).lineLimit(1)
+                        Spacer(minLength: 2)
+                        Button(s.hfEnabled ? "HF✓" : "HF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) }
+                            .buttonStyle(.bordered).controlSize(.mini).tint(s.hfEnabled ? .green : .secondary).disabled(!canAct)
+                        Button(s.lfEnabled ? "LF✓" : "LF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) }
+                            .buttonStyle(.bordered).controlSize(.mini).tint(s.lfEnabled ? .green : .secondary).disabled(!canAct)
+                        if s.id != c.activeSlot {
+                            Button("Use") { c.setActiveSlotButton(s.id) }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                        }
                     }
-                    .buttonStyle(.bordered).controlSize(.mini).frame(width: 58, alignment: .leading).disabled(!canAct)
-                    Text("HF \(ChameleonController.tagName(s.hfType))")
-                        .font(.caption2).foregroundStyle(s.hfEnabled ? Color.green : Color.secondary).lineLimit(1)
-                    Text("LF \(ChameleonController.tagName(s.lfType))")
-                        .font(.caption2).foregroundStyle(s.lfEnabled ? Color.green : Color.secondary).lineLimit(1)
-                    Spacer(minLength: 2)
-                    Button(s.hfEnabled ? "HF✓" : "HF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseHF, enabled: !s.hfEnabled) }
-                        .buttonStyle(.bordered).controlSize(.mini).tint(s.hfEnabled ? .green : .secondary).disabled(!canAct)
-                    Button(s.lfEnabled ? "LF✓" : "LF✕") { c.setSlotEnableButton(slot: s.id, sense: ChameleonController.senseLF, enabled: !s.lfEnabled) }
-                        .buttonStyle(.bordered).controlSize(.mini).tint(s.lfEnabled ? .green : .secondary).disabled(!canAct)
-                    if s.id != c.activeSlot {
-                        Button("Use") { c.setActiveSlotButton(s.id) }.buttonStyle(.bordered).controlSize(.mini).disabled(!canAct)
+                    if expandedSlots.contains(s.id) {
+                        SlotDetailCard(slot: s, detail: c.slotDetails[s.id])
                     }
                 }
             }
@@ -408,6 +421,58 @@ private struct Note: View {
     var body: some View {
         Text(text).font(.caption2).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SlotDetailCard: View {
+    let slot: SlotRow
+    let detail: SlotDetailData?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let d = detail, d.loaded {
+                if !d.name.isEmpty {
+                    Text(d.name).font(.subheadline.weight(.semibold))
+                }
+                SenseLine(label: "HF", type: ChameleonController.tagName(slot.hfType), on: slot.hfEnabled,
+                          present: slot.hfType != 0, value: d.hfUid.isEmpty ? "" : "UID \(d.hfUid)")
+                if slot.hfType != 0 && !d.hfBlock0.isEmpty {
+                    Text("Blk0 \(d.hfBlock0)").font(.system(.caption2, design: .monospaced)).foregroundStyle(.secondary)
+                        .padding(.leading, 12)
+                }
+                SenseLine(label: "LF", type: ChameleonController.tagName(slot.lfType), on: slot.lfEnabled,
+                          present: slot.lfType != 0, value: d.lfId.isEmpty ? "" : "ID \(d.lfId)")
+                if slot.hfType == 0 && slot.lfType == 0 {
+                    Text("Empty / default").font(.caption2).foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Loading…").font(.caption2).foregroundStyle(.secondary) }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct SenseLine: View {
+    let label: String
+    let type: String
+    let on: Bool
+    let present: Bool
+    let value: String
+    var body: some View {
+        if present {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Circle().fill(on ? Color.green : Color.secondary).frame(width: 7, height: 7)
+                    Text("\(label) · \(type)").font(.caption)
+                    Text(on ? "ON" : "OFF").font(.caption2.weight(.bold)).foregroundStyle(on ? .green : .secondary)
+                }
+                if !value.isEmpty {
+                    Text(value).font(.system(.caption2, design: .monospaced)).foregroundStyle(.secondary).padding(.leading, 12)
+                }
+            }
+        }
     }
 }
 

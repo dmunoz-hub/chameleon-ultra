@@ -80,6 +80,16 @@ struct SlotRow: Identifiable {
     let lfType: Int
 }
 
+struct SlotDetailData: Equatable {
+    var nameHF = ""
+    var nameLF = ""
+    var hfUid = ""
+    var hfBlock0 = ""
+    var lfId = ""
+    var loaded = false
+    var name: String { !nameHF.isEmpty ? nameHF : nameLF }
+}
+
 @MainActor
 final class ChameleonController: ObservableObject {
 
@@ -92,6 +102,7 @@ final class ChameleonController: ObservableObject {
     @Published var lastFoundKey: [UInt8]? = nil        // last recovered / found MIFARE key
     @Published var slots: [SlotRow] = []
     @Published var activeSlot: Int = 0
+    @Published var slotDetails: [Int: SlotDetailData] = [:]
 
     let ble = ChameleonBLE()
     private var cancellables = Set<AnyCancellable>()
@@ -710,8 +721,8 @@ final class ChameleonController: ObservableObject {
         }
     }
 
-    // Inspect one slot: name (nick), emulated UID/ID, type, HF block 0.
-    func slotDetail(_ s: SlotRow) {
+    // Inspect one slot: fetch name (nick), emulated UID (HF) / ID (LF), block 0 -> slotDetails.
+    func loadSlotDetail(_ s: SlotRow) {
         run("Slot \(s.id + 1)") {
             _ = try await self.ble.send(.setActiveSlot, data: [UInt8(s.id)])
             self.activeSlot = s.id
@@ -723,30 +734,24 @@ final class ChameleonController: ObservableObject {
                 }
                 return ""
             }
-            let nameHF = await nick(Self.senseHF)
-            let nameLF = await nick(Self.senseLF)
-            self.line("── Slot \(s.id + 1) ──")
-            self.line("Name — HF: \(nameHF.isEmpty ? "—" : nameHF)   LF: \(nameLF.isEmpty ? "—" : nameLF)")
-
+            var det = SlotDetailData()
+            det.nameHF = await nick(Self.senseHF)
+            det.nameLF = await nick(Self.senseLF)
             if s.hfType != 0 {
                 let ac = try await self.ble.send(.hf14aGetAntiColl)
                 if ac.genericOk, let first = ac.data.first {
-                    let d = ac.data; let ul = Int(first); var o = 1
-                    if d.count >= 1 + ul + 3 {
-                        let uid = Array(d[o ..< o + ul]); o += ul
-                        let atqa = Array(d[o ..< o + 2]); o += 2
-                        let sak = d[o]
-                        self.line("HF \(Self.tagName(s.hfType)) — UID \(ChameleonFrame.hexSpaced(uid))  SAK \(ChameleonFrame.hex(sak))  ATQA \(ChameleonFrame.hexSpaced(atqa))")
-                    } else { self.line("HF \(Self.tagName(s.hfType)) — (no anti-coll data)") }
-                } else { self.line("HF \(Self.tagName(s.hfType)) — (no anti-coll data)") }
+                    let d = ac.data; let ul = Int(first)
+                    if d.count >= 1 + ul { det.hfUid = ChameleonFrame.hexSpaced(Array(d[1 ..< 1 + ul])) }
+                }
                 let b0 = try await self.ble.send(.mf1ReadEmuBlockData, data: [0, 1])
-                if b0.genericOk, b0.data.count >= 16 { self.line("HF block 0: \(ChameleonFrame.hexSpaced(Array(b0.data.prefix(16))))") }
+                if b0.genericOk, b0.data.count >= 16 { det.hfBlock0 = ChameleonFrame.hexSpaced(Array(b0.data.prefix(16))) }
             }
             if s.lfType == 100 {
                 let id = try await self.ble.send(.em410xGetEmuId)
-                if id.genericOk, id.data.count >= 5 { self.line("LF EM410x ID: \(ChameleonFrame.hexSpaced(Array(id.data.prefix(5))))") }
+                if id.genericOk, id.data.count >= 5 { det.lfId = ChameleonFrame.hexSpaced(Array(id.data.prefix(5))) }
             }
-            if s.hfType == 0 && s.lfType != 100 && nameHF.isEmpty && nameLF.isEmpty { self.line("(slot is empty / default)") }
+            det.loaded = true
+            self.slotDetails[s.id] = det
             try await self.loadSlotsInner()
         }
     }
