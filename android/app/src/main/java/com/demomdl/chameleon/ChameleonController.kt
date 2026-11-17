@@ -118,6 +118,11 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
     private fun u64(d: ByteArray, o: Int): Long {
         var r = 0L; for (i in 0 until 8) r = (r shl 8) or (d[o + i].toLong() and 0xFF); return r
     }
+    // EM410X_GET_EMU_ID returns type(2)+id(5) on newer firmware; strip the 2-byte type prefix.
+    private fun emIdBytes(data: ByteArray): ByteArray {
+        val off = if (data.size >= 7) 2 else 0
+        return data.copyOfRange(off, minOf(off + 5, data.size))
+    }
 
     // MARK: Connection + info
     fun connect() = run("Connect") {
@@ -421,7 +426,7 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return false }
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         val g = ble.send(Cmd.EM410X_GET_EMU_ID)
-        if (g.genericOk && g.data.size >= 5) log("Slot ${slot + 1} stores EM410x ${g.data.copyOfRange(0, 5).hexSpaced()} (readback).")
+        if (g.genericOk && g.data.size >= 5) log("Slot ${slot + 1} stores EM410x ${emIdBytes(g.data).hexSpaced()} (readback).")
         loadSlotsInner()
         return true
     }
@@ -467,7 +472,7 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         }
         if (s.lfType == 100) {
             val id = ble.send(Cmd.EM410X_GET_EMU_ID)
-            if (id.genericOk && id.data.size >= 5) lfId = id.data.copyOfRange(0, 5).hexSpaced()
+            if (id.genericOk && id.data.size >= 5) lfId = emIdBytes(id.data).hexSpaced()
         }
         _slotDetails.value = _slotDetails.value + (s.index to SlotDetail(nameHF, nameLF, hfUid, hfBlock0, lfId, true))
         loadSlotsInner()

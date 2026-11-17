@@ -393,6 +393,11 @@ final class ChameleonController: ObservableObject {
     private func u64be(_ d: [UInt8], _ o: Int) -> UInt64 {
         var r: UInt64 = 0; for i in 0..<8 { r = (r << 8) | UInt64(d[o+i]) }; return r
     }
+    // EM410X_GET_EMU_ID returns type(2)+id(5) on newer firmware; strip the 2-byte type prefix.
+    private func emIdBytes(_ data: [UInt8]) -> [UInt8] {
+        let off = data.count >= 7 ? 2 : 0
+        return Array(data[off ..< min(off + 5, data.count)])
+    }
 
     // MARK: - Magic card UID / block 0 write
 
@@ -687,7 +692,7 @@ final class ChameleonController: ObservableObject {
         _ = try await ble.send(.slotDataConfigSave)
         let g = try await ble.send(.em410xGetEmuId)
         if g.genericOk, g.data.count >= 5 {
-            line("Slot \(activeSlot + 1) stores EM410x \(ChameleonFrame.hexSpaced(Array(g.data.prefix(5)))) (readback).")
+            line("Slot \(activeSlot + 1) stores EM410x \(ChameleonFrame.hexSpaced(emIdBytes(g.data))) (readback).")
         }
         try await loadSlotsInner()
         return true
@@ -748,7 +753,7 @@ final class ChameleonController: ObservableObject {
             }
             if s.lfType == 100 {
                 let id = try await self.ble.send(.em410xGetEmuId)
-                if id.genericOk, id.data.count >= 5 { det.lfId = ChameleonFrame.hexSpaced(Array(id.data.prefix(5))) }
+                if id.genericOk, id.data.count >= 5 { det.lfId = ChameleonFrame.hexSpaced(self.emIdBytes(id.data)) }
             }
             det.loaded = true
             self.slotDetails[s.id] = det

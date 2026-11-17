@@ -269,6 +269,8 @@ function parseHexBytes(s){
 // ---- Hex helpers ----
 const hex  = b => Array.from(b,x=>x.toString(16).padStart(2,"0").toUpperCase()).join("");
 const hexS = b => Array.from(b,x=>x.toString(16).padStart(2,"0").toUpperCase()).join(" ");
+// EM410X_GET_EMU_ID returns type(2)+id(5) on newer fw; strip the 2-byte type prefix.
+function emIdBytes(d){ const off = d.length >= 7 ? 2 : 0; return Array.from(d.slice(off, off + 5)); }
 
 // ---- Frame codec ----
 function lrc(bytes){ let s=0; for(const b of bytes) s=(s+b)&0xff; return (0x100 - s)&0xff; }
@@ -795,7 +797,7 @@ async function storeLF(){
   if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   const g = await send(CMD.EM410X_GET_EMU_ID);
-  if(g.status === 0x68 && g.data.length >= 5) logLine("sys", `Slot ${slot+1} stores EM410x ${hexS(Array.from(g.data.slice(0,5)))} (readback).`);
+  if(g.status === 0x68 && g.data.length >= 5) logLine("sys", `Slot ${slot+1} stores EM410x ${hexS(emIdBytes(g.data))} (readback).`);
   await loadSlots();
   return true;
 }
@@ -820,7 +822,7 @@ async function loadSlotDetail(s){
     const b0 = await send(CMD.MF1_READ_EMU_BLOCK_DATA, [0, 1]);
     if(b0.status===0x68 && b0.data.length>=16) d.hfBlock0 = hexS(Array.from(b0.data.slice(0, 16)));
   }
-  if(s.lfType===100){ const id = await send(CMD.EM410X_GET_EMU_ID); if(id.status===0x68 && id.data.length>=5) d.lfId = hexS(Array.from(id.data.slice(0, 5))); }
+  if(s.lfType===100){ const id = await send(CMD.EM410X_GET_EMU_ID); if(id.status===0x68 && id.data.length>=5) d.lfId = hexS(emIdBytes(id.data)); }
   slotDetailCache[s.i] = d;
   renderSlots(slotsCache);
 }
