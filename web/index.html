@@ -764,8 +764,15 @@ async function setSlotEnable(slot, sense, enabled){
   else logLine("err", "Enable/disable failed: " + (STATUS_LABEL[r.status] || r.status));
 }
 async function saveSlots(){
+  const name = slotNameInput();
+  if(name){ await setSlotNick(activeSlot, SENSE_HF, name); await setSlotNick(activeSlot, SENSE_LF, name); }
   const r = await send(CMD.SLOT_DATA_CONFIG_SAVE, [], 5000);
-  logLine(r.status===0x68 ? "sys" : "err", r.status===0x68 ? "Slot config saved to flash." : "Save failed.");
+  if(name){
+    const d = slotDetailCache[activeSlot] || {}; d.name = name; d.nameHF = name; d.nameLF = name;
+    slotDetailCache[activeSlot] = d;
+    logLine(r.status===0x68 ? "sys" : "err", r.status===0x68 ? `Saved. Slot ${activeSlot+1} named "${name}".` : "Save failed.");
+  } else logLine(r.status===0x68 ? "sys" : "err", r.status===0x68 ? "Slot config saved to flash." : "Save failed.");
+  await loadSlots();
 }
 async function setMode(reader){
   await send(CMD.CHANGE_DEVICE_MODE, [reader ? 1 : 0]);

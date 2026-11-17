@@ -385,9 +385,20 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         else log("Enable/disable failed (${Status.label(r.status)}).")
     }
 
-    fun saveConfig() = run("Save") {
+    fun saveConfig(name: String = "") = run("Save") {
+        val n = name.trim()
+        if (n.isNotEmpty()) {
+            setSlotNick(_activeSlot.value, SENSE_HF, n)
+            setSlotNick(_activeSlot.value, SENSE_LF, n)
+        }
         val r = ble.send(Cmd.SLOT_DATA_CONFIG_SAVE, timeoutMs = 5000L)
-        log(if (r.genericOk) "Slot config saved to flash." else "Save failed (${Status.label(r.status)}).")
+        if (n.isNotEmpty()) {
+            val slot = _activeSlot.value
+            val d = (_slotDetails.value[slot] ?: SlotDetail()).copy(loaded = true, nameHF = n, nameLF = n)
+            _slotDetails.value = _slotDetails.value + (slot to d)
+            log(if (r.genericOk) "Saved. Slot ${slot + 1} named \"$n\"." else "Save failed (${Status.label(r.status)}).")
+        } else log(if (r.genericOk) "Slot config saved to flash." else "Save failed (${Status.label(r.status)}).")
+        loadSlotsInner()
     }
 
     fun setMode(reader: Boolean) = run("Mode") {

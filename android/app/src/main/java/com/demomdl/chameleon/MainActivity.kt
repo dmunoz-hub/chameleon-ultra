@@ -221,7 +221,7 @@ private fun ChameleonScreen(vm: ChameleonController) {
             SectionCard("Slots & emulation") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallBtn("Load", canAct, Modifier.weight(1f)) { vm.loadSlots() }
-                    SmallBtn("Save", canAct, Modifier.weight(1f)) { vm.saveConfig() }
+                    SmallBtn("Save", canAct, Modifier.weight(1f)) { vm.saveConfig(slotName) }
                     SmallBtn("Reader", canAct, Modifier.weight(1f)) { vm.setMode(true) }
                     SmallBtn("Emulate", canAct, Modifier.weight(1f), prominent = true) { vm.setMode(false) }
                 }

@@ -643,10 +643,23 @@ final class ChameleonController: ObservableObject {
         }
     }
 
-    func saveConfig() {
+    func saveConfig(name: String = "") {
         run("Save") {
+            let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !n.isEmpty {
+                await self.setSlotNick(UInt8(self.activeSlot), sense: Self.senseHF, name: n)
+                await self.setSlotNick(UInt8(self.activeSlot), sense: Self.senseLF, name: n)
+            }
             let r = try await self.ble.send(.slotDataConfigSave, timeout: 5)
-            self.line(r.genericOk ? "Slot config saved to flash." : "Save failed (\(r.statusEnum.label)).")
+            if !n.isEmpty {
+                var d = self.slotDetails[self.activeSlot] ?? SlotDetailData()
+                d.loaded = true; d.nameHF = n; d.nameLF = n
+                self.slotDetails[self.activeSlot] = d
+                self.line(r.genericOk ? "Saved. Slot \(self.activeSlot + 1) named \"\(n)\"." : "Save failed (\(r.statusEnum.label)).")
+            } else {
+                self.line(r.genericOk ? "Slot config saved to flash." : "Save failed (\(r.statusEnum.label)).")
+            }
+            try await self.loadSlotsInner()
         }
     }
 

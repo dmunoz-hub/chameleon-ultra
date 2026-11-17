@@ -242,7 +242,7 @@ struct ContentView: View {
         Card(title: "Slots & emulation") {
             HStack {
                 SmallButton("Load", disabled: !canAct) { c.loadSlots() }
-                SmallButton("Save", disabled: !canAct) { c.saveConfig() }
+                SmallButton("Save", disabled: !canAct) { c.saveConfig(name: slotName) }
                 SmallButton("Reader", disabled: !canAct) { c.setMode(reader: true) }
                 SmallButton("Emulate", disabled: !canAct, prominent: true) { c.setMode(reader: false) }
             }
