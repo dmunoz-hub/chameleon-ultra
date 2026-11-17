@@ -403,7 +403,13 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         ble.send(Cmd.SET_SLOT_ENABLE, byteArrayOf(slot.toByte(), sense.toByte(), 1))
     }
 
-    private suspend fun storeHFInner(): Boolean {
+    private suspend fun setSlotNick(slot: Int, sense: Int, name: String) {
+        val n = name.trim()
+        if (n.isEmpty()) return
+        val bytes = n.toByteArray(Charsets.UTF_8).take(32).toByteArray()
+        ble.send(Cmd.SET_SLOT_TAG_NICK, byteArrayOf(slot.toByte(), sense.toByte()) + bytes)
+    }
+    private suspend fun storeHFInner(name: String): Boolean {
         val t = _lastHF.value
         if (t == null) { log("Scan an HF tag first."); return false }
         val slot = _activeSlot.value
@@ -412,38 +418,50 @@ class ChameleonController(app: Application) : AndroidViewModel(app) {
         p.add(t.uid.size.toByte()); p.addAll(t.uid.toList()); p.addAll(t.atqa.toList()); p.add(t.sak.toByte()); p.add(t.ats.size.toByte()); p.addAll(t.ats.toList())
         val r = ble.send(Cmd.HF14A_SET_ANTI_COLL_DATA, p.toByteArray())
         if (!r.genericOk) { log("Set anti-coll failed (${Status.label(r.status)})."); return false }
+        setSlotNick(slot, SENSE_HF, name)
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         loadSlotsInner()
-        log("Saved HF UID ${t.uid.hexSpaced()} to slot ${slot + 1}.")
+        log("Saved HF UID ${t.uid.hexSpaced()} to slot ${slot + 1}${if (name.isNotBlank()) " (\"${name.trim()}\")" else ""}.")
         return true
     }
-    private suspend fun storeLFInner(): Boolean {
+    private suspend fun storeLFInner(name: String): Boolean {
         val id = lastIdBytes
         if (id == null) { log("Read an EM410x tag first."); return false }
         val slot = _activeSlot.value
         setupSlotForEmulation(slot, 100, SENSE_LF) // EM410X
         val r = ble.send(Cmd.EM410X_SET_EMU_ID, id)
         if (!r.genericOk) { log("Set EM410x emu id failed (${Status.label(r.status)})."); return false }
+        setSlotNick(slot, SENSE_LF, name)
         ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
         val g = ble.send(Cmd.EM410X_GET_EMU_ID)
         if (g.genericOk && g.data.size >= 5) log("Slot ${slot + 1} stores EM410x ${emIdBytes(g.data).hexSpaced()} (readback).")
         loadSlotsInner()
         return true
     }
-    fun storeHF() = run("Save HF to slot") { storeHFInner() }
-    fun storeLF() = run("Save LF to slot") { storeLFInner() }
+    fun storeHF(name: String = "") = run("Save HF to slot") { storeHFInner(name) }
+    fun storeLF(name: String = "") = run("Save LF to slot") { storeLFInner(name) }
 
-    fun emulateHF() = run("Emulate HF") {
-        if (storeHFInner()) {
+    fun emulateHF(name: String = "") = run("Emulate HF") {
+        if (storeHFInner(name)) {
             ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
             log("Emulating on slot ${_activeSlot.value + 1} (tag mode). Present the HF antenna to a reader.")
         }
     }
-    fun emulateLF() = run("Emulate LF") {
-        if (storeLFInner()) {
+    fun emulateLF(name: String = "") = run("Emulate LF") {
+        if (storeLFInner(name)) {
             ble.send(Cmd.CHANGE_DEVICE_MODE, byteArrayOf(0))
             log("Emulating on slot ${_activeSlot.value + 1} (tag mode). Present the LF antenna to a reader.")
         }
+    }
+    fun clearSlot(slot: Int) = run("Clear slot ${slot + 1}") {
+        ble.send(Cmd.DELETE_SLOT_SENSE_TYPE, byteArrayOf(slot.toByte(), SENSE_HF.toByte()))
+        ble.send(Cmd.DELETE_SLOT_SENSE_TYPE, byteArrayOf(slot.toByte(), SENSE_LF.toByte()))
+        ble.send(Cmd.DELETE_SLOT_TAG_NICK, byteArrayOf(slot.toByte(), SENSE_HF.toByte()))
+        ble.send(Cmd.DELETE_SLOT_TAG_NICK, byteArrayOf(slot.toByte(), SENSE_LF.toByte()))
+        ble.send(Cmd.SLOT_DATA_CONFIG_SAVE)
+        _slotDetails.value = _slotDetails.value - slot
+        log("Slot ${slot + 1} cleared.")
+        loadSlotsInner()
     }
     fun setAnimation(full: Boolean) = run("LED mode") {
         ble.send(Cmd.SET_ANIMATION_MODE, byteArrayOf((if (full) 0 else 2).toByte()))

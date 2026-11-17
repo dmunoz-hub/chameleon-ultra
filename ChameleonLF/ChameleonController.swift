@@ -668,27 +668,36 @@ final class ChameleonController: ObservableObject {
 
     /// Store the last scanned HF tag into the active slot (no mode switch).
     @discardableResult
-    private func storeHFInner() async throws -> Bool {
+    private func setSlotNick(_ slot: UInt8, sense: UInt8, name: String) async {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        _ = try? await ble.send(.setSlotTagNick, data: [slot, sense] + Array(n.utf8.prefix(32)))
+    }
+
+    private func storeHFInner(name: String) async throws -> Bool {
         guard let t = lastHFTag else { line("Scan an HF tag first."); return false }
         let slot = UInt8(activeSlot)
         try await setupSlotForEmulation(slot: slot, tagType: 1001, sense: Self.senseHF) // MIFARE 1K
         var p: [UInt8] = [UInt8(t.uid.count)]; p += t.uid; p += t.atqa; p.append(t.sak); p.append(UInt8(t.ats.count)); p += t.ats
         let r = try await ble.send(.hf14aSetAntiColl, data: p)
         guard r.genericOk else { line("Set anti-coll failed (\(r.statusEnum.label))."); return false }
+        await setSlotNick(slot, sense: Self.senseHF, name: name)
         _ = try await ble.send(.slotDataConfigSave)
         try await loadSlotsInner()
-        line("Saved HF UID \(ChameleonFrame.hexSpaced(t.uid)) to slot \(activeSlot + 1).")
+        let suffix = name.isEmpty ? "" : " (\"\(name)\")"
+        line("Saved HF UID \(ChameleonFrame.hexSpaced(t.uid)) to slot \(activeSlot + 1)\(suffix).")
         return true
     }
 
     /// Store the last read EM410x into the active slot (no mode switch), with readback.
     @discardableResult
-    private func storeLFInner() async throws -> Bool {
+    private func storeLFInner(name: String) async throws -> Bool {
         guard let id = lastReadId else { line("Read an EM410x tag first."); return false }
         let slot = UInt8(activeSlot)
         try await setupSlotForEmulation(slot: slot, tagType: 100, sense: Self.senseLF) // EM410X
         let r = try await ble.send(.em410xSetEmuId, data: id)
         guard r.genericOk else { line("Set EM410x emu id failed (\(r.statusEnum.label))."); return false }
+        await setSlotNick(slot, sense: Self.senseLF, name: name)
         _ = try await ble.send(.slotDataConfigSave)
         let g = try await ble.send(.em410xGetEmuId)
         if g.genericOk, g.data.count >= 5 {
@@ -698,23 +707,36 @@ final class ChameleonController: ObservableObject {
         return true
     }
 
-    func storeHF() { run("Save HF to slot") { _ = try await self.storeHFInner() } }
-    func storeLF() { run("Save LF to slot") { _ = try await self.storeLFInner() } }
+    func storeHF(name: String = "") { run("Save HF to slot") { _ = try await self.storeHFInner(name: name) } }
+    func storeLF(name: String = "") { run("Save LF to slot") { _ = try await self.storeLFInner(name: name) } }
 
-    func emulateHF() {
+    func emulateHF(name: String = "") {
         run("Emulate HF") {
-            if try await self.storeHFInner() {
+            if try await self.storeHFInner(name: name) {
                 _ = try await self.ble.send(.changeDeviceMode, data: [0])
                 self.line("Emulating on slot \(self.activeSlot + 1) (tag mode). Present the HF antenna to a reader.")
             }
         }
     }
-    func emulateLF() {
+    func emulateLF(name: String = "") {
         run("Emulate LF") {
-            if try await self.storeLFInner() {
+            if try await self.storeLFInner(name: name) {
                 _ = try await self.ble.send(.changeDeviceMode, data: [0])
                 self.line("Emulating on slot \(self.activeSlot + 1) (tag mode). Present the LF antenna to a reader.")
             }
+        }
+    }
+
+    func clearSlot(_ slot: Int) {
+        run("Clear slot \(slot + 1)") {
+            _ = try? await self.ble.send(.deleteSlotSenseType, data: [UInt8(slot), Self.senseHF])
+            _ = try? await self.ble.send(.deleteSlotSenseType, data: [UInt8(slot), Self.senseLF])
+            _ = try? await self.ble.send(.deleteSlotTagNick, data: [UInt8(slot), Self.senseHF])
+            _ = try? await self.ble.send(.deleteSlotTagNick, data: [UInt8(slot), Self.senseLF])
+            _ = try await self.ble.send(.slotDataConfigSave)
+            self.slotDetails[slot] = nil
+            self.line("Slot \(slot + 1) cleared.")
+            try await self.loadSlotsInner()
         }
     }
 

@@ -22,8 +22,9 @@ struct ContentView: View {
     // Darkside inputs
     @State private var dsBlock = "3"
     @State private var dsB = false
-    // Expanded slot rows
+    // Expanded slot rows + slot name
     @State private var expandedSlots: Set<Int> = []
+    @State private var slotName = ""
 
     private var canAct: Bool { c.isConnected && !c.busy }
     private func u8(_ s: String) -> UInt8 { UInt8(s.trimmingCharacters(in: .whitespaces)) ?? 0 }
@@ -107,7 +108,7 @@ struct ContentView: View {
                 ActionButton("Read", "wave.3.right", disabled: !c.isConnected || c.busy) { c.readEM410xButton() }
                 ActionButton("Write", "square.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.writeButton() }
                 ActionButton("Verify", "checkmark.seal", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.verifyButton() }
-                ActionButton("→ Slot", "tray.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.storeLF() }
+                ActionButton("→ Slot", "tray.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastReadId == nil) { c.storeLF(name: slotName) }
             }
 
             Button {
@@ -150,7 +151,7 @@ struct ContentView: View {
 
             HStack {
                 ActionButton("Scan", "dot.radiowaves.up.forward", disabled: !c.isConnected || c.busy) { c.hf14aScanButton() }
-                ActionButton("→ Slot", "tray.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastHFTag == nil) { c.storeHF() }
+                ActionButton("→ Slot", "tray.and.arrow.down", disabled: !c.isConnected || c.busy || c.lastHFTag == nil) { c.storeHF(name: slotName) }
                 ActionButton("Recover keys", "key", disabled: !c.isConnected || c.busy) { c.recoverKeys() }
             }
         }
@@ -246,10 +247,12 @@ struct ContentView: View {
                 SmallButton("Emulate", disabled: !canAct, prominent: true) { c.setMode(reader: false) }
             }
             HStack {
-                SmallButton("Emul. HF UID", disabled: !canAct || c.lastHFTag == nil, prominent: true) { c.emulateHF() }
-                SmallButton("Emul. LF ID", disabled: !canAct || c.lastReadId == nil, prominent: true) { c.emulateLF() }
+                SmallButton("Emul. HF UID", disabled: !canAct || c.lastHFTag == nil, prominent: true) { c.emulateHF(name: slotName) }
+                SmallButton("Emul. LF ID", disabled: !canAct || c.lastReadId == nil, prominent: true) { c.emulateLF(name: slotName) }
                 SmallButton("LED Full", disabled: !canAct) { c.setAnimation(full: true) }
             }
+            TextField("slot name (optional — used when saving/emulating)", text: $slotName)
+                .textFieldStyle(.roundedBorder).font(.caption)
             ForEach(c.slots) { s in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
@@ -278,6 +281,8 @@ struct ContentView: View {
                     }
                     if expandedSlots.contains(s.id) {
                         SlotDetailCard(slot: s, detail: c.slotDetails[s.id])
+                        Button("Clear slot") { c.clearSlot(s.id) }
+                            .buttonStyle(.bordered).controlSize(.small).tint(.red).disabled(!canAct)
                     }
                 }
             }

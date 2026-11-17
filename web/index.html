@@ -184,6 +184,9 @@
       <button class="act" data-fn="modereader" disabled>Reader mode</button>
       <button class="act good" data-fn="modeemulate" disabled>Emulate mode</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <input id="slotName" type="text" placeholder="slot name (optional — used when saving/emulating)">
+    </div>
     <div id="slotList" style="margin-top:10px"></div>
     <div class="row" style="margin-top:8px">
       <button class="act good" data-fn="emuhf" disabled>Emulate scanned HF UID</button>
@@ -225,8 +228,8 @@ const CMD = {
   MF1_DETECT_PRNG:2002, MF1_STATIC_NESTED_ACQUIRE:2003, MF1_DARKSIDE_ACQUIRE:2004,
   MF1_DETECT_NT_DIST:2005, MF1_NESTED_ACQUIRE:2006, MF1_AUTH_ONE_KEY_BLOCK:2007,
   MF1_READ_ONE_BLOCK:2008, MF1_WRITE_ONE_BLOCK:2009, HF14A_RAW:2010, MF1_CHECK_KEYS_ON_BLOCK:2015,
-  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_DATA_DEFAULT:1005, SET_SLOT_ENABLE:1006, GET_SLOT_TAG_NICK:1008, SLOT_DATA_CONFIG_SAVE:1009,
-  SAVE_SETTINGS:1013, SET_ANIMATION_MODE:1015, GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, GET_ENABLED_SLOTS:1023,
+  SET_ACTIVE_SLOT:1003, SET_SLOT_TAG_TYPE:1004, SET_SLOT_DATA_DEFAULT:1005, SET_SLOT_ENABLE:1006, SET_SLOT_TAG_NICK:1007, GET_SLOT_TAG_NICK:1008, SLOT_DATA_CONFIG_SAVE:1009,
+  SAVE_SETTINGS:1013, SET_ANIMATION_MODE:1015, GET_ACTIVE_SLOT:1018, GET_SLOT_INFO:1019, DELETE_SLOT_TAG_NICK:1021, GET_ENABLED_SLOTS:1023, DELETE_SLOT_SENSE_TYPE:1024,
   EM410X_SCAN:3000, EM410X_WRITE_TO_T55XX:3001,
   HF14A_SET_ANTI_COLL_DATA:4001, MF1_READ_EMU_BLOCK_DATA:4008, HF14A_GET_ANTI_COLL_DATA:4018, EM410X_SET_EMU_ID:5000, EM410X_GET_EMU_ID:5001,
 };
@@ -728,6 +731,9 @@ function renderSlots(slots){
       const det = document.createElement("div");
       det.style.cssText = "margin:6px 0 2px 8px;padding:9px 11px;background:var(--panel2);border-radius:9px;font-size:.8rem";
       det.innerHTML = slotDetailCache[s.i] ? renderDetailHTML(s, slotDetailCache[s.i]) : "Loading…";
+      const clr = document.createElement("button"); clr.textContent = "Clear slot";
+      clr.style.cssText = "margin-top:8px;padding:4px 9px;font-size:.72rem"; clr.onclick = () => guard(() => clearSlot(s.i));
+      det.appendChild(clr);
       wrap.appendChild(det);
     }
     el.appendChild(wrap);
@@ -779,9 +785,11 @@ async function storeHF(){
   const p = [lastHF.uid.length, ...lastHF.uid, ...lastHF.atqa, lastHF.sak, lastHF.ats.length, ...lastHF.ats];
   const r = await send(CMD.HF14A_SET_ANTI_COLL_DATA, p);
   if(r.status !== 0x68){ logLine("err", "Set anti-coll failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
+  const name = slotNameInput();
+  await setSlotNick(slot, SENSE_HF, name);
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   await loadSlots();
-  logLine("sys", `Saved HF UID ${hexS(lastHF.uid)} to slot ${slot+1}.`);
+  logLine("sys", `Saved HF UID ${hexS(lastHF.uid)} to slot ${slot+1}${name ? ` ("${name}")` : ""}.`);
   return true;
 }
 // Store the last read EM410x into the active slot (no mode switch), with readback.
@@ -795,6 +803,7 @@ async function storeLF(){
   await send(CMD.SET_SLOT_ENABLE, [slot, SENSE_LF, 1]);
   const r = await send(CMD.EM410X_SET_EMU_ID, Array.from(lastLfId));
   if(r.status !== 0x68){ logLine("err", "Set EM410x emu id failed: " + (STATUS_LABEL[r.status] || r.status)); return false; }
+  await setSlotNick(slot, SENSE_LF, slotNameInput());
   await send(CMD.SLOT_DATA_CONFIG_SAVE);
   const g = await send(CMD.EM410X_GET_EMU_ID);
   if(g.status === 0x68 && g.data.length >= 5) logLine("sys", `Slot ${slot+1} stores EM410x ${hexS(emIdBytes(g.data))} (readback).`);
@@ -807,6 +816,19 @@ async function setAnimation(full){
   await send(CMD.SET_ANIMATION_MODE, [full ? 0 : 2]); // 0=FULL, 2=NONE
   await send(CMD.SAVE_SETTINGS);
   logLine("sys", full ? "LED animation set to Full (saved). The LED now flashes on field detect." : "LED animation set to None (saved).");
+}
+function encName(name){ return Array.from(new TextEncoder().encode(String(name).slice(0, 32))); }
+function slotNameInput(){ const el = document.getElementById("slotName"); return el ? el.value.trim() : ""; }
+async function setSlotNick(slot, sense, name){ if(name) await send(CMD.SET_SLOT_TAG_NICK, [slot, sense, ...encName(name)]); }
+async function clearSlot(slot){
+  await send(CMD.DELETE_SLOT_SENSE_TYPE, [slot, SENSE_HF]);
+  await send(CMD.DELETE_SLOT_SENSE_TYPE, [slot, SENSE_LF]);
+  await send(CMD.DELETE_SLOT_TAG_NICK, [slot, SENSE_HF]);
+  await send(CMD.DELETE_SLOT_TAG_NICK, [slot, SENSE_LF]);
+  await send(CMD.SLOT_DATA_CONFIG_SAVE);
+  delete slotDetailCache[slot];
+  logLine("sys", `Slot ${slot+1} cleared.`);
+  await loadSlots();
 }
 // Inspect one slot -> slotDetailCache[i], then re-render inline.
 async function loadSlotDetail(s){

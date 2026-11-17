@@ -72,6 +72,7 @@ private fun ChameleonScreen(vm: ChameleonController) {
     val details by vm.slotDetails.collectAsState()
     val logLines by vm.log.collectAsState()
     var expandedSlots by remember { mutableStateOf(setOf<Int>()) }
+    var slotName by remember { mutableStateOf("") }
 
     val canAct = connected && !busy
 
@@ -131,7 +132,7 @@ private fun ChameleonScreen(vm: ChameleonController) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallBtn("Read", canAct, Modifier.weight(1f)) { vm.readEM410x() }
                     SmallBtn("Write + Verify", canAct && lastId != null, Modifier.weight(1f), prominent = true) { vm.writeAndVerify() }
-                    SmallBtn("→ Slot", canAct && lastId != null, Modifier.weight(1f)) { vm.storeLF() }
+                    SmallBtn("→ Slot", canAct && lastId != null, Modifier.weight(1f)) { vm.storeLF(slotName) }
                 }
                 Hint("Read the source tag → swap in a blank T5577 → Write + Verify. → Slot saves the ID into the active slot.")
             }
@@ -147,7 +148,7 @@ private fun ChameleonScreen(vm: ChameleonController) {
                 } else Text("Scan a 13.56 MHz card to read its UID and type.", style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallBtn("Scan HF tag", canAct, Modifier.weight(1f), prominent = true) { vm.hfScan() }
-                    SmallBtn("→ Slot", canAct && hf != null, Modifier.weight(1f)) { vm.storeHF() }
+                    SmallBtn("→ Slot", canAct && hf != null, Modifier.weight(1f)) { vm.storeHF(slotName) }
                 }
             }
 
@@ -225,10 +226,13 @@ private fun ChameleonScreen(vm: ChameleonController) {
                     SmallBtn("Emulate", canAct, Modifier.weight(1f), prominent = true) { vm.setMode(false) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallBtn("Emul. HF UID", canAct && hf != null, Modifier.weight(1f), prominent = true) { vm.emulateHF() }
-                    SmallBtn("Emul. LF ID", canAct && lastId != null, Modifier.weight(1f), prominent = true) { vm.emulateLF() }
+                    SmallBtn("Emul. HF UID", canAct && hf != null, Modifier.weight(1f), prominent = true) { vm.emulateHF(slotName) }
+                    SmallBtn("Emul. LF ID", canAct && lastId != null, Modifier.weight(1f), prominent = true) { vm.emulateLF(slotName) }
                     SmallBtn("LED Full", canAct, Modifier.weight(1f)) { vm.setAnimation(true) }
                 }
+                OutlinedTextField(value = slotName, onValueChange = { slotName = it },
+                    placeholder = { Text("slot name (optional — used when saving/emulating)") },
+                    singleLine = true, textStyle = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
                 slots.forEach { s ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -253,7 +257,13 @@ private fun ChameleonScreen(vm: ChameleonController) {
                             if (s.index != active) TextButton(onClick = { vm.setActiveSlot(s.index) }, enabled = canAct,
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) { Text("Use", fontSize = 10.sp) }
                         }
-                        if (expandedSlots.contains(s.index)) SlotDetailCard(s, details[s.index])
+                        if (expandedSlots.contains(s.index)) {
+                            SlotDetailCard(s, details[s.index])
+                            TextButton(onClick = { vm.clearSlot(s.index) }, enabled = canAct,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                                Text("Clear slot", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                 }
                 Hint("Load the 8 slots, then tap a slot (S#) to inspect its name, UID/ID and data. Toggle HF/LF, pick the active one. Emulate loads the last read card into the active slot and switches to tag mode. Save to keep across reboots.")
