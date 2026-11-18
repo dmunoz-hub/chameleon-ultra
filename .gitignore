@@ -22,3 +22,5 @@ android/.cxx/
 # Node (Vercel CLI)
 web/node_modules/
 .vercel/
+.vercel
+.env*

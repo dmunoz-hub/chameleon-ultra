@@ -15,6 +15,7 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.location.LocationManager
 import android.os.Build
 import android.os.ParcelUuid
 import kotlinx.coroutines.CancellableContinuation
@@ -62,14 +63,24 @@ class ChameleonBle(private val context: Context) {
         val ad = adapter ?: throw IllegalStateException("Bluetooth unavailable")
         if (!ad.isEnabled) throw IllegalStateException("Bluetooth is off")
         if (isConnected) return
+        // Android 11 and below require Location services ON for BLE scanning (same for Chrome Web Bluetooth).
+        if (Build.VERSION.SDK_INT <= 30) {
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            val locOn = lm?.let { it.isProviderEnabled(LocationManager.GPS_PROVIDER) || it.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } ?: false
+            if (!locOn) {
+                log("BLE scan needs Location services ON (Android 11 and below). Turn on Location in Settings and retry.")
+                throw IllegalStateException("Turn on Location services, then try Connect again.")
+            }
+        }
         scanner = ad.bluetoothLeScanner ?: throw IllegalStateException("No BLE scanner")
-        log("Scanning for NUS service…")
+        log("Scanning for the Chameleon…")
         withTimeout(timeoutMs) {
             suspendCancellableCoroutine { cont: CancellableContinuation<Unit> ->
                 connectCont = cont
-                val filters = listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(NUS)).build())
                 val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-                scanner?.startScan(filters, settings, scanCallback)
+                // No hardware ScanFilter: some tablet BLE chipsets don't match 128-bit UUID filters,
+                // so we scan everything and match by advertised service UUID / name in the callback.
+                scanner?.startScan(null, settings, scanCallback)
                 cont.invokeOnCancellation { runCatching { scanner?.stopScan(scanCallback) } }
             }
         }
@@ -79,8 +90,12 @@ class ChameleonBle(private val context: Context) {
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val uuids = result.scanRecord?.serviceUuids
+            val name = result.device.name ?: result.scanRecord?.deviceName
+            val matches = (uuids?.any { it.uuid == NUS } == true) || (name?.contains("chameleon", ignoreCase = true) == true)
+            if (!matches) return
             scanner?.stopScan(this)
-            log("Found device (RSSI ${result.rssi}). Connecting…")
+            log("Found ${name ?: "device"} (RSSI ${result.rssi}). Connecting…")
             gatt = result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         }
         override fun onScanFailed(errorCode: Int) {
