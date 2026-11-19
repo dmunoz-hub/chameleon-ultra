@@ -14,9 +14,12 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.location.LocationManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -51,15 +54,21 @@ class ChameleonBle(private val context: Context) {
     private val buffer = FrameBuffer()
     private var mtuPayload = 20
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var targetDevice: BluetoothDevice? = null
+    private var connectRetries = 0
+    private var servicesRequested = false
+
     private var connectCont: CancellableContinuation<Unit>? = null
     private var responseCont: CancellableContinuation<Response>? = null
 
     private val writeQueue = ArrayDeque<ByteArray>()
     private var writing = false
+    private var writeRetried = false
 
     private fun log(s: String) = onLog?.invoke(s)
 
-    suspend fun connect(timeoutMs: Long = 15000) {
+    suspend fun connect(timeoutMs: Long = 25000) {
         val ad = adapter ?: throw IllegalStateException("Bluetooth unavailable")
         if (!ad.isEnabled) throw IllegalStateException("Bluetooth is off")
         if (isConnected) return
@@ -96,7 +105,9 @@ class ChameleonBle(private val context: Context) {
             if (!matches) return
             scanner?.stopScan(this)
             log("Found ${name ?: "device"} (RSSI ${result.rssi}). Connecting…")
-            gatt = result.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            targetDevice = result.device
+            connectRetries = 0
+            connectDevice()
         }
         override fun onScanFailed(errorCode: Int) {
             log("Scan failed: $errorCode")
@@ -107,21 +118,35 @@ class ChameleonBle(private val context: Context) {
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> { log("Connected. Negotiating MTU…"); g.requestMtu(247) }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    isConnected = false; onConnectionChange?.invoke(false)
-                    rxChar = null; txChar = null; writeQueue.clear(); writing = false
-                    connectCont?.resumeWithException(IllegalStateException("disconnected")); connectCont = null
-                    responseCont?.resumeWithException(IllegalStateException("disconnected")); responseCont = null
-                    log("Disconnected.")
-                }
+            if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                connectRetries = 0
+                servicesRequested = false
+                runCatching { g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH) }
+                log("Connected. Setting up…")
+                // Request a larger MTU, but don't gate discovery on it; discover after a short
+                // settle, and again via onMtuChanged — whichever comes first (startDiscovery dedupes).
+                mainHandler.postDelayed({ runCatching { g.requestMtu(247) } }, 500L)
+                mainHandler.postDelayed({ startDiscovery(g) }, 1800L)
+                return
             }
+            // Disconnected or a connection error (e.g. status 133 on some tablets).
+            runCatching { g.close() }
+            if (!isConnected && connectCont != null && connectRetries < 2) {
+                connectRetries++
+                log("Connection dropped (status $status). Retry $connectRetries…")
+                mainHandler.postDelayed({ connectDevice() }, 700L)
+                return
+            }
+            isConnected = false; onConnectionChange?.invoke(false)
+            rxChar = null; txChar = null; writeQueue.clear(); writing = false
+            connectCont?.resumeWithException(IllegalStateException("disconnected (status $status)")); connectCont = null
+            responseCont?.resumeWithException(IllegalStateException("disconnected")); responseCont = null
+            log("Disconnected.")
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             mtuPayload = if (status == BluetoothGatt.GATT_SUCCESS) (mtu - 3) else 20
-            g.discoverServices()
+            startDiscovery(g)
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
@@ -145,11 +170,12 @@ class ChameleonBle(private val context: Context) {
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            if (descriptor.uuid == CCCD) ready()
+            // Give the stack a moment after enabling notifications before we start sending.
+            if (descriptor.uuid == CCCD) mainHandler.postDelayed({ ready() }, 250L)
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
-            if (ch.uuid == RX) writeNext()
+            if (ch.uuid == RX) { writeRetried = false; writeQueue.poll(); writeNext() }
         }
 
         @Deprecated("Deprecated in Java")
@@ -163,11 +189,25 @@ class ChameleonBle(private val context: Context) {
         }
     }
 
+    private fun connectDevice() {
+        val dev = targetDevice ?: return
+        runCatching { gatt?.close() }
+        gatt = dev.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+    }
+
+    private fun startDiscovery(g: BluetoothGatt) {
+        if (servicesRequested) return
+        servicesRequested = true
+        log("Discovering services…")
+        g.discoverServices()
+    }
+
     private fun fail(msg: String) {
         connectCont?.resumeWithException(IllegalStateException(msg)); connectCont = null
     }
 
     private fun ready() {
+        if (isConnected) return
         isConnected = true; onConnectionChange?.invoke(true)
         log("Ready.")
         connectCont?.resume(Unit); connectCont = null
@@ -207,23 +247,27 @@ class ChameleonBle(private val context: Context) {
             writeQueue.add(frame.copyOfRange(i, end))
             i = end
         }
+        writeRetried = false
         if (!writing) writeNext()
     }
 
     private fun writeNext() {
         val g = gatt ?: return
         val r = rxChar ?: return
-        val next = writeQueue.poll()
-        if (next == null) { writing = false; return }
+        val next = writeQueue.peek() ?: run { writing = false; return }   // kept until write confirms
         writing = true
-        if (Build.VERSION.SDK_INT >= 33) {
-            g.writeCharacteristic(r, next, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        val ok = if (Build.VERSION.SDK_INT >= 33) {
+            g.writeCharacteristic(r, next, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
         } else {
             @Suppress("DEPRECATION") run {
                 r.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
                 r.value = next
                 g.writeCharacteristic(r)
             }
+        }
+        if (!ok && !writeRetried) {
+            writeRetried = true
+            mainHandler.postDelayed({ writeNext() }, 120L) // GATT busy — retry the same chunk once
         }
     }
 }
